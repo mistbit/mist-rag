@@ -139,3 +139,39 @@ class ChunkPreviewResponse(BaseModel):
     document: PreviewDocument
     stats: PreviewStats
     chunks: list[ChunkRecord]
+
+
+class SaveChunkRunRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    document_id: str | None = Field(default=None, alias="documentId")
+    preview_request: ChunkPreviewRequest = Field(alias="previewRequest")
+
+
+class ChunkRunSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    document_id: str | None = Field(default=None, alias="documentId")
+    total_chunks: int = Field(alias="totalChunks")
+    chunk_size: int = Field(alias="chunkSize")
+    chunk_overlap: int = Field(alias="chunkOverlap")
+    char_count: int = Field(alias="charCount")
+    created_at: str = Field(alias="createdAt")
+
+
+class ChunkRunRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    document_id: str | None = Field(default=None, alias="documentId")
+    created_at: str = Field(alias="createdAt")
+    preview_request: ChunkPreviewRequest = Field(alias="previewRequest")
+    preview_response: ChunkPreviewResponse = Field(alias="previewResponse")
+
+
+class ChunkRunCatalogResponse(BaseModel):
+    runs: list[ChunkRunSummary]

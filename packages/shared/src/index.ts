@@ -123,3 +123,33 @@ export type ChunkPreviewResponse = {
   stats: ChunkPreviewStats;
   chunks: ChunkRecord[];
 };
+
+export type SaveChunkRunRequest = {
+  title: string;
+  documentId?: string | null;
+  previewRequest: ChunkPreviewRequest;
+};
+
+export type ChunkRunSummary = {
+  id: string;
+  title: string;
+  documentId?: string | null;
+  totalChunks: number;
+  chunkSize: number;
+  chunkOverlap: number;
+  charCount: number;
+  createdAt: string;
+};
+
+export type ChunkRunRecord = {
+  id: string;
+  title: string;
+  documentId?: string | null;
+  createdAt: string;
+  previewRequest: ChunkPreviewRequest;
+  previewResponse: ChunkPreviewResponse;
+};
+
+export type ChunkRunCatalogResponse = {
+  runs: ChunkRunSummary[];
+};

@@ -4,14 +4,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .chunking import generate_chunk_preview
+from .chunk_runs import get_chunk_run, list_chunk_runs, save_chunk_run
 from .content import load_overview
 from .documents import get_document, list_documents, save_document
 from .schemas import (
+    ChunkRunCatalogResponse,
+    ChunkRunRecord,
     ChunkPreviewRequest,
     ChunkPreviewResponse,
     DocumentCatalogResponse,
     DocumentRecord,
     RagOverview,
+    SaveChunkRunRequest,
     SaveDocumentRequest,
 )
 
@@ -60,6 +64,24 @@ def get_document_by_id(document_id: str) -> DocumentRecord:
 @app.post("/api/v1/documents", response_model=DocumentRecord)
 def create_document(payload: SaveDocumentRequest) -> DocumentRecord:
     return save_document(payload)
+
+
+@app.get("/api/v1/chunk-runs", response_model=ChunkRunCatalogResponse)
+def get_chunk_runs() -> ChunkRunCatalogResponse:
+    return list_chunk_runs()
+
+
+@app.get("/api/v1/chunk-runs/{run_id}", response_model=ChunkRunRecord)
+def get_chunk_run_by_id(run_id: str) -> ChunkRunRecord:
+    run = get_chunk_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Chunk run not found.")
+    return run
+
+
+@app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)
+def create_chunk_run(payload: SaveChunkRunRequest) -> ChunkRunRecord:
+    return save_chunk_run(payload)
 
 
 @app.post("/api/v1/chunk-preview", response_model=ChunkPreviewResponse)

@@ -3,6 +3,8 @@ import type { ChangeEvent, FormEvent } from "react";
 import type {
   ChunkPreviewRequest,
   ChunkPreviewResponse,
+  ChunkRunCatalogResponse,
+  ChunkRunRecord,
   DocumentCatalogResponse,
   DocumentRecord,
   RagOverview,
@@ -35,24 +37,33 @@ const EMPTY_CATALOG: DocumentCatalogResponse = {
   saved: [],
 };
 
+const EMPTY_RUN_CATALOG: ChunkRunCatalogResponse = {
+  runs: [],
+};
+
 type LoadStatus = "loading" | "online" | "fallback";
+type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
-type CatalogStatus = "loading" | "online" | "error";
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function App() {
   const [overview, setOverview] = useState<RagOverview>(fallbackOverview as RagOverview);
   const [overviewStatus, setOverviewStatus] = useState<LoadStatus>("loading");
-  const [catalog, setCatalog] = useState<DocumentCatalogResponse>(EMPTY_CATALOG);
-  const [catalogStatus, setCatalogStatus] = useState<CatalogStatus>("loading");
-  const [catalogError, setCatalogError] = useState("");
+  const [documentCatalog, setDocumentCatalog] = useState<DocumentCatalogResponse>(EMPTY_CATALOG);
+  const [documentCatalogStatus, setDocumentCatalogStatus] = useState<AsyncStatus>("loading");
+  const [documentCatalogError, setDocumentCatalogError] = useState("");
+  const [runCatalog, setRunCatalog] = useState<ChunkRunCatalogResponse>(EMPTY_RUN_CATALOG);
+  const [runCatalogStatus, setRunCatalogStatus] = useState<AsyncStatus>("loading");
+  const [runCatalogError, setRunCatalogError] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [previewRequest, setPreviewRequest] = useState<ChunkPreviewRequest>(DEFAULT_REQUEST);
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
   const [previewError, setPreviewError] = useState("");
   const [previewResult, setPreviewResult] = useState<ChunkPreviewResponse | null>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [saveMessage, setSaveMessage] = useState("");
+  const [documentSaveStatus, setDocumentSaveStatus] = useState<AsyncStatus>("idle");
+  const [documentSaveMessage, setDocumentSaveMessage] = useState("");
+  const [runSaveStatus, setRunSaveStatus] = useState<AsyncStatus>("idle");
+  const [runSaveMessage, setRunSaveMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -85,13 +96,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void loadCatalog();
+    void loadDocumentCatalog();
+    void loadRunCatalog();
     void runPreview(DEFAULT_REQUEST);
   }, []);
 
-  async function loadCatalog() {
-    setCatalogStatus("loading");
-    setCatalogError("");
+  async function loadDocumentCatalog() {
+    setDocumentCatalogStatus("loading");
+    setDocumentCatalogError("");
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/documents`);
@@ -100,11 +112,30 @@ export default function App() {
       }
 
       const data = (await response.json()) as DocumentCatalogResponse;
-      setCatalog(data);
-      setCatalogStatus("online");
+      setDocumentCatalog(data);
+      setDocumentCatalogStatus("online");
     } catch (error) {
-      setCatalogStatus("error");
-      setCatalogError(error instanceof Error ? error.message : "Unable to load document catalog.");
+      setDocumentCatalogStatus("error");
+      setDocumentCatalogError(error instanceof Error ? error.message : "Unable to load document catalog.");
+    }
+  }
+
+  async function loadRunCatalog() {
+    setRunCatalogStatus("loading");
+    setRunCatalogError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-runs`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const data = (await response.json()) as ChunkRunCatalogResponse;
+      setRunCatalog(data);
+      setRunCatalogStatus("online");
+    } catch (error) {
+      setRunCatalogStatus("error");
+      setRunCatalogError(error instanceof Error ? error.message : "Unable to load chunk history.");
     }
   }
 
@@ -135,8 +166,21 @@ export default function App() {
     }
   }
 
+  function resetSelections() {
+    setSelectedDocumentId(null);
+    setSelectedRunId(null);
+    setPreviewResult(null);
+    setPreviewStatus("idle");
+    setPreviewError("");
+    setDocumentSaveStatus("idle");
+    setDocumentSaveMessage("");
+    setRunSaveStatus("idle");
+    setRunSaveMessage("");
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSelectedRunId(null);
     await runPreview(previewRequest);
   }
 
@@ -148,9 +192,7 @@ export default function App() {
 
     const content = await file.text();
     const sourceType = file.name.endsWith(".md") ? "md" : "txt";
-    setSelectedDocumentId(null);
-    setSaveStatus("idle");
-    setSaveMessage("");
+    resetSelections();
     setPreviewRequest((current) => ({
       ...current,
       title: file.name,
@@ -162,9 +204,7 @@ export default function App() {
   }
 
   function updateRequest<K extends keyof ChunkPreviewRequest>(key: K, value: ChunkPreviewRequest[K]) {
-    setSelectedDocumentId(null);
-    setSaveStatus("idle");
-    setSaveMessage("");
+    resetSelections();
     setPreviewRequest((current) => ({
       ...current,
       [key]: value,
@@ -188,18 +228,43 @@ export default function App() {
 
       setPreviewRequest(nextRequest);
       setSelectedDocumentId(document.id);
-      setSaveStatus("idle");
-      setSaveMessage(document.origin === "sample" ? "已载入样例文档。" : "已载入已保存文档。");
+      setSelectedRunId(null);
+      setDocumentSaveStatus("idle");
+      setDocumentSaveMessage(document.origin === "sample" ? "已载入样例文档。" : "已载入已保存文档。");
+      setRunSaveStatus("idle");
+      setRunSaveMessage("");
       await runPreview(nextRequest);
     } catch (error) {
-      setSaveStatus("error");
-      setSaveMessage(error instanceof Error ? error.message : "Unable to load document.");
+      setDocumentSaveStatus("error");
+      setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to load document.");
+    }
+  }
+
+  async function handleRunSelect(runId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-runs/${runId}`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const run = (await response.json()) as ChunkRunRecord;
+      setSelectedRunId(run.id);
+      setSelectedDocumentId(run.documentId ?? null);
+      setPreviewRequest(run.previewRequest);
+      setPreviewResult(run.previewResponse);
+      setPreviewStatus("success");
+      setPreviewError("");
+      setRunSaveStatus("saved");
+      setRunSaveMessage("已载入历史切块记录。");
+    } catch (error) {
+      setRunSaveStatus("error");
+      setRunSaveMessage(error instanceof Error ? error.message : "Unable to load chunk run.");
     }
   }
 
   async function handleSaveDocument() {
-    setSaveStatus("saving");
-    setSaveMessage("");
+    setDocumentSaveStatus("loading");
+    setDocumentSaveMessage("");
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/documents`, {
@@ -221,12 +286,49 @@ export default function App() {
 
       const document = (await response.json()) as DocumentRecord;
       setSelectedDocumentId(document.id);
-      setSaveStatus("saved");
-      setSaveMessage(`已保存为 ${document.title}`);
-      await loadCatalog();
+      setDocumentSaveStatus("saved");
+      setDocumentSaveMessage(`已保存为 ${document.title}`);
+      await loadDocumentCatalog();
     } catch (error) {
-      setSaveStatus("error");
-      setSaveMessage(error instanceof Error ? error.message : "Unable to save document.");
+      setDocumentSaveStatus("error");
+      setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to save document.");
+    }
+  }
+
+  async function handleSaveChunkRun() {
+    if (!previewResult) {
+      return;
+    }
+
+    setRunSaveStatus("loading");
+    setRunSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-runs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: previewRequest.title,
+          documentId: selectedDocumentId,
+          previewRequest,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const run = (await response.json()) as ChunkRunRecord;
+      setSelectedRunId(run.id);
+      setRunSaveStatus("saved");
+      setRunSaveMessage(`已保存切块记录 ${run.id}`);
+      await loadRunCatalog();
+    } catch (error) {
+      setRunSaveStatus("error");
+      setRunSaveMessage(error instanceof Error ? error.message : "Unable to save chunk run.");
     }
   }
 
@@ -276,7 +378,7 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 2 / Ingest history</p>
+          <p className="eyebrow">Sprint 2.5 / Chunk history</p>
           <h1>{overview.hero.title}</h1>
           <p className="hero__subtitle">{overview.hero.subtitle}</p>
         </div>
@@ -284,9 +386,9 @@ export default function App() {
         <div className="hero__panel">
           <h2>当前交付边界</h2>
           <ul>
-            <li>保留学习首页和 chunk preview 实验区</li>
-            <li>新增样例数据集与本地保存文档列表</li>
-            <li>可以从样例或已保存文档重新载入内容继续预览</li>
+            <li>保留学习首页、文档库和切块预览实验区</li>
+            <li>新增切块历史记录的保存与回看</li>
+            <li>同一页里可以在文档、参数和历史记录之间来回切换</li>
           </ul>
         </div>
       </section>
@@ -322,7 +424,7 @@ export default function App() {
       <section className="section lab">
         <div className="section__heading">
           <p className="eyebrow">Ingest lab</p>
-          <h2>样例、保存与切块预览在同一页闭环</h2>
+          <h2>文档、preview 和历史回看形成一个实验闭环</h2>
         </div>
 
         <div className="lab__grid">
@@ -333,22 +435,69 @@ export default function App() {
                   <p className="eyebrow">Document library</p>
                   <h3>样例与已保存文档</h3>
                 </div>
-                <span className={`status-pill status-pill--${catalogStatus === "error" ? "fallback" : "online"}`}>
-                  {catalogStatus}
+                <span className={`status-pill status-pill--${documentCatalogStatus === "error" ? "fallback" : "online"}`}>
+                  {documentCatalogStatus}
                 </span>
               </div>
 
               <div className="lab-actions">
-                <button type="button" className="secondary-button" onClick={() => void loadCatalog()}>
+                <button type="button" className="secondary-button" onClick={() => void loadDocumentCatalog()}>
                   刷新列表
                 </button>
                 <p className="helper-text">保存后的文档会进入本地持久化列表，重启 API 后仍可加载。</p>
               </div>
 
-              {catalogError ? <p className="error-text">{catalogError}</p> : null}
+              {documentCatalogError ? <p className="error-text">{documentCatalogError}</p> : null}
+              {renderDocumentSection("样例数据集", documentCatalog.samples)}
+              {renderDocumentSection("已保存文档", documentCatalog.saved)}
+            </section>
 
-              {renderDocumentSection("样例数据集", catalog.samples)}
-              {renderDocumentSection("已保存文档", catalog.saved)}
+            <section className="lab-panel">
+              <div className="lab-result__header">
+                <div>
+                  <p className="eyebrow">Chunk history</p>
+                  <h3>已保存的切块记录</h3>
+                </div>
+                <span className={`status-pill status-pill--${runCatalogStatus === "error" ? "fallback" : "online"}`}>
+                  {runCatalogStatus}
+                </span>
+              </div>
+
+              <div className="lab-actions">
+                <button type="button" className="secondary-button" onClick={() => void loadRunCatalog()}>
+                  刷新历史
+                </button>
+                <p className="helper-text">历史记录会保存当时的文档标题、切块参数和完整 chunk 结果。</p>
+              </div>
+
+              {runCatalogError ? <p className="error-text">{runCatalogError}</p> : null}
+
+              {runCatalog.runs.length === 0 ? (
+                <p className="helper-text">还没有保存过切块记录。</p>
+              ) : (
+                <div className="document-list">
+                  {runCatalog.runs.map((run) => (
+                    <button
+                      key={run.id}
+                      type="button"
+                      className={`document-card ${selectedRunId === run.id ? "document-card--active" : ""}`}
+                      onClick={() => void handleRunSelect(run.id)}
+                    >
+                      <div className="document-card__meta">
+                        <strong>{run.title}</strong>
+                        <span>{run.totalChunks} chunks</span>
+                      </div>
+                      <p>
+                        chunkSize {run.chunkSize} / overlap {run.chunkOverlap}
+                      </p>
+                      <div className="document-card__footer">
+                        <span>{run.charCount} chars</span>
+                        <span>{run.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
 
             <form className="lab-panel" onSubmit={handleSubmit}>
@@ -357,8 +506,8 @@ export default function App() {
                   <p className="eyebrow">Editor</p>
                   <h3>编辑当前文档</h3>
                 </div>
-                <span className={`status-pill status-pill--${saveStatus === "error" ? "fallback" : "online"}`}>
-                  {saveStatus}
+                <span className={`status-pill status-pill--${documentSaveStatus === "error" ? "fallback" : "online"}`}>
+                  {documentSaveStatus}
                 </span>
               </div>
 
@@ -441,14 +590,16 @@ export default function App() {
                 <button
                   className="secondary-button"
                   type="button"
-                  disabled={saveStatus === "saving"}
+                  disabled={documentSaveStatus === "loading"}
                   onClick={() => void handleSaveDocument()}
                 >
-                  {saveStatus === "saving" ? "保存中..." : "保存当前文档"}
+                  {documentSaveStatus === "loading" ? "保存中..." : "保存当前文档"}
                 </button>
               </div>
 
-              {saveMessage ? <p className={saveStatus === "error" ? "error-text" : "helper-text"}>{saveMessage}</p> : null}
+              {documentSaveMessage ? (
+                <p className={documentSaveStatus === "error" ? "error-text" : "helper-text"}>{documentSaveMessage}</p>
+              ) : null}
             </form>
           </div>
 
@@ -463,6 +614,19 @@ export default function App() {
               </span>
             </div>
 
+            <div className="lab-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={!previewResult || runSaveStatus === "loading"}
+                onClick={() => void handleSaveChunkRun()}
+              >
+                {runSaveStatus === "loading" ? "保存中..." : "保存本次切块记录"}
+              </button>
+              <p className="helper-text">保存后可从左侧历史列表重新载入当时的参数和结果。</p>
+            </div>
+
+            {runSaveMessage ? <p className={runSaveStatus === "error" ? "error-text" : "helper-text"}>{runSaveMessage}</p> : null}
             {previewError ? <p className="error-text">{previewError}</p> : null}
 
             {previewResult ? (

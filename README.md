@@ -1,11 +1,11 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览”的 ingest 闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看”的 ingest 闭环。
 
 ## 当前内容
 
 - `apps/web`: React + Vite 学习首页，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
-- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存和切块预览接口
+- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览和 chunk 历史接口
 - `packages/shared`: 前后端共享的基础类型定义与学习首页单一数据源 `rag-overview.json`
 - `datasets/demo-corpus`: 供实验区直接载入的样例文档
 - `docs`: 产品规划与架构说明
@@ -17,6 +17,7 @@
 - 文档实验区支持载入样例数据集与已保存文档
 - 当前编辑内容可保存到本地持久化存储，重启 API 后仍可重新载入
 - API 支持 `chunkSize` / `chunkOverlap` 参数的切块预览
+- 当前 preview 结果可保存成 chunk 历史记录，并可重新载入当时的参数和结果
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -81,6 +82,9 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/documents`
 - `GET /api/v1/documents/{document_id}`
 - `POST /api/v1/documents`
+- `GET /api/v1/chunk-runs`
+- `GET /api/v1/chunk-runs/{run_id}`
+- `POST /api/v1/chunk-runs`
 - `POST /api/v1/chunk-preview`
 
 `GET /api/v1/documents` 会返回两个列表：
@@ -98,6 +102,22 @@ uvicorn app.main:app --reload --port 8000
 }
 ```
 
+`POST /api/v1/chunk-runs` 请求示例：
+
+```json
+{
+  "title": "my-rag-notes.md",
+  "documentId": "doc-1234567890",
+  "previewRequest": {
+    "title": "my-rag-notes.md",
+    "sourceType": "md",
+    "content": "# Notes\n\nChunking is never free.",
+    "chunkSize": 280,
+    "chunkOverlap": 60
+  }
+}
+```
+
 `POST /api/v1/chunk-preview` 请求示例：
 
 ```json
@@ -112,9 +132,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成样例数据集和本地保存之后，下一步建议继续推进文档摄取：
+完成 chunk 历史回看之后，下一步建议继续推进文档摄取：
 
-1. 为已保存文档增加删除、重命名和更新时间展示
-2. 落地 `Chunk` 持久化，而不只是临时 preview
+1. 为已保存文档和 chunk 历史增加删除能力
+2. 把 `Chunk` 持久化和文档保存真正关联起来
 3. 引入真正的 dataset 管理与状态页
 4. 再进入 embedding 和索引构建
