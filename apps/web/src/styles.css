@@ -285,6 +285,10 @@ dd {
   resize: vertical;
 }
 
+.form-field .textarea--compact {
+  min-height: 96px;
+}
+
 .lab-actions {
   display: flex;
   flex-wrap: wrap;

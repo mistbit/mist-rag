@@ -13,6 +13,7 @@ import type {
   IndexBuildCatalogResponse,
   IndexBuildRecord,
   RagOverview,
+  SearchIndexBuildResponse,
 } from "@mist-rag/shared";
 import fallbackOverview from "@mist-rag/data";
 
@@ -59,6 +60,8 @@ const DEFAULT_INDEX_BUILD_REQUEST: CreateIndexBuildRequest = {
   vectorDimensions: 12,
 };
 
+const EMPTY_SEARCH_RESULT: SearchIndexBuildResponse | null = null;
+
 type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
@@ -98,6 +101,11 @@ export default function App() {
   const [indexBuildActionMessage, setIndexBuildActionMessage] = useState("");
   const [indexBuildRequest, setIndexBuildRequest] = useState<CreateIndexBuildRequest>(DEFAULT_INDEX_BUILD_REQUEST);
   const [selectedIndexBuild, setSelectedIndexBuild] = useState<IndexBuildRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState("什么样的 chunk 更适合检索？");
+  const [searchTopK, setSearchTopK] = useState(3);
+  const [searchStatus, setSearchStatus] = useState<AsyncStatus>("idle");
+  const [searchMessage, setSearchMessage] = useState("");
+  const [searchResult, setSearchResult] = useState<SearchIndexBuildResponse | null>(EMPTY_SEARCH_RESULT);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +239,9 @@ export default function App() {
     setSelectedIndexBuild(null);
     setIndexBuildActionStatus("idle");
     setIndexBuildActionMessage("");
+    setSearchStatus("idle");
+    setSearchMessage("");
+    setSearchResult(EMPTY_SEARCH_RESULT);
   }
 
   async function runPreview(request: ChunkPreviewRequest) {
@@ -412,6 +423,9 @@ export default function App() {
       const record = (await response.json()) as IndexBuildRecord;
       setSelectedIndexBuildId(record.id);
       setSelectedIndexBuild(record);
+      setSearchStatus("idle");
+      setSearchMessage("");
+      setSearchResult(EMPTY_SEARCH_RESULT);
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage("已载入索引构建记录。");
     } catch (error) {
@@ -700,12 +714,50 @@ export default function App() {
       const record = (await response.json()) as IndexBuildRecord;
       setSelectedIndexBuildId(record.id);
       setSelectedIndexBuild(record);
+      setSearchStatus("idle");
+      setSearchMessage("");
+      setSearchResult(EMPTY_SEARCH_RESULT);
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage(`已构建索引 ${record.id}`);
       await loadIndexBuildCatalog(record.chunkSetId);
     } catch (error) {
       setIndexBuildActionStatus("error");
       setIndexBuildActionMessage(error instanceof Error ? error.message : "Unable to create index build.");
+    }
+  }
+
+  async function handleSearchIndexBuild() {
+    if (!selectedIndexBuildId) {
+      return;
+    }
+
+    setSearchStatus("loading");
+    setSearchMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/index-builds/${selectedIndexBuildId}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          topK: searchTopK,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as SearchIndexBuildResponse;
+      setSearchResult(record);
+      setSearchStatus("saved");
+      setSearchMessage(`已返回 top ${record.results.length} 检索结果。`);
+    } catch (error) {
+      setSearchStatus("error");
+      setSearchMessage(error instanceof Error ? error.message : "Unable to search index build.");
     }
   }
 
@@ -759,7 +811,7 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 4 / Index build skeleton</p>
+          <p className="eyebrow">Sprint 5 / Retrieval lab</p>
           <h1>{overview.hero.title}</h1>
           <p className="hero__subtitle">{overview.hero.subtitle}</p>
         </div>
@@ -769,8 +821,9 @@ export default function App() {
           <ul>
             <li>保留学习首页、文档库、preview 与 chunk 历史</li>
             <li>文档级 chunk 集合继续作为稳定输入层</li>
-            <li>新增索引构建记录，观察向量维度、词表规模和构建状态</li>
-            <li>同一页里可以在文档、chunk 集合、索引记录和历史之间切换</li>
+            <li>索引记录继续承担 embedding/index 的实验骨架</li>
+            <li>新增 top-k 检索实验，直接观察 query 与 chunk 的相似度排序</li>
+            <li>同一页里可以在文档、chunk 集合、索引记录、检索结果和历史之间切换</li>
           </ul>
         </div>
       </section>
@@ -806,7 +859,7 @@ export default function App() {
       <section className="section lab">
         <div className="section__heading">
           <p className="eyebrow">Ingest lab</p>
-          <h2>文档、chunk 集合与索引构建形成第三层闭环</h2>
+          <h2>文档、chunk 集合、索引与 top-k 检索形成第三层闭环</h2>
         </div>
 
         <div className="lab__grid">
@@ -1116,6 +1169,49 @@ export default function App() {
                   </p>
                   <p className="helper-text">高频词快照：{selectedIndexBuild.topTerms.join(" / ") || "暂无"}</p>
 
+                  <div className="chunk-set-editor">
+                    <div className="form-field">
+                      <label htmlFor="searchQuery">Query</label>
+                      <textarea
+                        id="searchQuery"
+                        className="textarea--compact"
+                        rows={3}
+                        maxLength={200}
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-field">
+                        <label htmlFor="searchTopK">Top K</label>
+                        <input
+                          id="searchTopK"
+                          type="number"
+                          min={1}
+                          max={8}
+                          step={1}
+                          value={searchTopK}
+                          onChange={(event) => setSearchTopK(Number(event.target.value))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="lab-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={searchStatus === "loading"}
+                        onClick={() => void handleSearchIndexBuild()}
+                      >
+                        {searchStatus === "loading" ? "检索中..." : "运行 top-k 检索"}
+                      </button>
+                      <p className="helper-text">当前 query 会用和索引相同的 `demo-hash` 语义骨架向量化，再与 chunk 向量做相似度排序。</p>
+                    </div>
+
+                    {searchMessage ? <p className={searchStatus === "error" ? "error-text" : "helper-text"}>{searchMessage}</p> : null}
+                  </div>
+
                   <div className="vector-preview-list">
                     {selectedIndexBuild.chunkVectors.slice(0, 3).map((vector) => (
                       <article key={vector.chunkId} className="chunk-card">
@@ -1130,6 +1226,27 @@ export default function App() {
                       </article>
                     ))}
                   </div>
+
+                  {searchResult ? (
+                    <div className="vector-preview-list">
+                      <p className="helper-text">
+                        Query terms: {searchResult.queryTerms.join(" / ") || "暂无"}，当前返回 top {searchResult.topK}。
+                      </p>
+                      {searchResult.results.map((result) => (
+                        <article key={result.chunkId} className="chunk-card">
+                          <div className="chunk-card__meta">
+                            <strong>Rank {result.rank}</strong>
+                            <span>score {result.score.toFixed(4)}</span>
+                            <span>
+                              offset {result.startOffset}-{result.endOffset}
+                            </span>
+                            <span>{result.tokenCount} tokens</span>
+                          </div>
+                          <pre>{result.text}</pre>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>

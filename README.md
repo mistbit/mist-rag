@@ -1,11 +1,11 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1 和阶段 2 的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录”的实验闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1、阶段 2 与基础检索之间的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录 + top-k 检索实验”的实验闭环。
 
 ## 当前内容
 
 - `apps/web`: React + Vite 学习首页，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
-- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览、chunk 历史、文档级 chunk 集合和索引构建接口
+- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览、chunk 历史、文档级 chunk 集合、索引构建和 top-k 检索接口
 - `packages/shared`: 前后端共享的基础类型定义与学习首页单一数据源 `rag-overview.json`
 - `datasets/demo-corpus`: 供实验区直接载入的样例文档
 - `docs`: 产品规划与架构说明
@@ -21,6 +21,7 @@
 - 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
 - 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除、命名和备注
 - 可基于某个文档级 chunk 集合构建索引记录，观察向量维度、词表规模和基础 embedding 状态
+- 可基于某个 index build 直接输入 query，返回 top-k chunk 排序结果与相似度分数
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -89,6 +90,7 @@ uvicorn app.main:app --reload --port 8000
 - `POST /api/v1/documents`
 - `POST /api/v1/documents/{document_id}/chunk-sets`
 - `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds`
+- `POST /api/v1/index-builds/{build_id}/search`
 - `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
@@ -141,6 +143,12 @@ uvicorn app.main:app --reload --port 8000
 - 当前实现使用本地 `demo-hash-v1` 向量化骨架，重点是把索引状态、向量维度和基础统计稳定下来
 - 删除 chunk 集合时，会级联删除它下面的索引构建记录
 
+基础检索说明：
+
+- `POST /api/v1/index-builds/{build_id}/search` 会把 query 用和当前索引相同的 `demo-hash-v1` 骨架向量化
+- 返回结果按相似度从高到低排序，并给出 `score`、`rank`、`offset` 和 chunk 文本
+- 这一层先关注“召回和排序是怎么来的”，还没有进入生成答案阶段
+
 删除规则：
 
 - 删除 `saved` 文档时，会级联清理这个文档下的 chunk 集合
@@ -157,6 +165,15 @@ uvicorn app.main:app --reload --port 8000
 {
   "embeddingModel": "demo-hash-v1",
   "vectorDimensions": 12
+}
+```
+
+`POST /api/v1/index-builds/{build_id}/search` 请求示例：
+
+```json
+{
+  "query": "什么样的 chunk 更适合检索？",
+  "topK": 3
 }
 ```
 
@@ -200,9 +217,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成索引构建骨架之后，下一步建议继续推进 embedding / retrieval：
+完成 top-k 检索实验之后，下一步建议继续推进 retrieval / generation：
 
 1. 把 `demo-hash` 替换成真实 embedding provider
-2. 基于 `index-builds` 增加 query 向量化和 top-k 检索接口
+2. 为检索结果增加阈值、query rewrite 和 retrieval trace
 3. 为索引记录补删除 / 重建和状态追踪
-4. 引入真正的 dataset 管理与状态页
+4. 引入真正的 prompt 组装与答案生成页

@@ -315,3 +315,47 @@ class IndexBuildRecord(BaseModel):
 
 class IndexBuildCatalogResponse(BaseModel):
     builds: list[IndexBuildSummary]
+
+
+class SearchIndexBuildRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    query: str = Field(min_length=1, max_length=200)
+    top_k: int = Field(alias="topK", default=3, ge=1, le=8)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_query(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("query must not be blank.")
+        return normalized
+
+
+class SearchResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    chunk_id: str = Field(alias="chunkId")
+    document_id: str = Field(alias="documentId")
+    rank: int
+    score: float
+    text: str
+    token_count: int = Field(alias="tokenCount")
+    start_offset: int = Field(alias="startOffset")
+    end_offset: int = Field(alias="endOffset")
+
+
+class SearchIndexBuildResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    build_id: str = Field(alias="buildId")
+    chunk_set_id: str = Field(alias="chunkSetId")
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    chunk_set_label: str = Field(alias="chunkSetLabel")
+    embedding_model: str = Field(alias="embeddingModel")
+    vector_dimensions: int = Field(alias="vectorDimensions")
+    query: str
+    query_terms: list[str] = Field(alias="queryTerms")
+    top_k: int = Field(alias="topK")
+    results: list[SearchResult]

@@ -1,4 +1,4 @@
-# Mist RAG Sprint 5 Architecture
+# Mist RAG Sprint 5.5 Architecture
 
 ## 目标
 
@@ -15,6 +15,7 @@
 - 增加文档级 chunk 集合的删除管理
 - 增加文档级 chunk 集合的命名与备注
 - 增加索引构建记录，作为 embedding / index 阶段的最小骨架
+- 增加基于 index build 的 top-k 检索实验
 
 这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的摄取闭环和阶段 2 的索引骨架接起来。
 
@@ -52,7 +53,7 @@ mist-rag/
 
 ### `services/api`
 
-FastAPI 服务当前承担十二类能力：
+FastAPI 服务当前承担十三类能力：
 
 - 输出健康状态，便于前端或后续容器探活
 - 读取共享 JSON，暴露统一的 `overview` 数据
@@ -67,6 +68,7 @@ FastAPI 服务当前承担十二类能力：
 - 基于 chunk 集合构建索引记录
 - 列出某个 chunk 集合下的索引构建历史
 - 读取单条索引构建详情
+- 基于某个 index build 执行 query 向量化与 top-k 检索
 
 其中切块逻辑仍然保持“轻实现”：
 
@@ -92,6 +94,7 @@ FastAPI 服务当前承担十二类能力：
 - 删除文档级 chunk 集合不会删除文档，但会级联删除相关索引构建记录
 - 文档级 chunk 集合默认会生成系统名称，但支持后续人工命名和备注
 - 当前索引构建采用本地 `demo-hash-v1` 骨架，不依赖外部模型服务
+- 当前 top-k 检索直接复用同一套 hash 向量空间，便于观察 query 和 chunk 如何进入同一个表示空间
 
 ### `apps/web`
 
@@ -108,6 +111,7 @@ Web 端当前承担两层职责：
 - 提供文档级 chunk 集合删除，让这一层能力也具备基础维护能力
 - 提供文档级 chunk 集合名称和备注，方便区分不同切块策略
 - 提供索引构建面板，让用户观察向量维度、词表规模、高频词和 chunk 向量快照
+- 提供检索实验区，让用户基于 index build 输入 query 并观察 top-k 排序结果
 
 前端会优先请求 API；如果 API 未启动，则首页总览仍会退回本地 JSON。切块实验区则依赖真实 API。
 
@@ -139,6 +143,7 @@ apps/web/src/App.tsx
   ├─> POST /api/v1/documents
   ├─> POST /api/v1/documents/{id}/chunk-sets
   ├─> POST /api/v1/chunk-sets/{id}/index-builds
+  ├─> POST /api/v1/index-builds/{id}/search
   ├─> DELETE /api/v1/documents/{id}
   ├─> GET /api/v1/chunk-runs
   ├─> GET /api/v1/chunk-runs/{id}
@@ -158,6 +163,8 @@ apps/web/src/App.tsx
         │     └─> services/api/storage/document_chunk_sets.json
         ├─> services/api/app/index_builds.py
         │     └─> services/api/storage/index_builds.json
+        ├─> services/api/app/retrieval.py
+        │     └─> 返回 top-k 检索结果
         └─> services/api/app/chunking.py
               └─> 返回 ChunkPreviewResponse
 ```
@@ -166,7 +173,7 @@ apps/web/src/App.tsx
 
 当进入阶段 1 和阶段 2 时，建议沿着下面的方向扩展：
 
-1. 在 `services/api` 把 `demo-hash` 替换成真实 embedding provider，并接入检索接口
+1. 在 `services/api` 把 `demo-hash` 替换成真实 embedding provider，并补 retrieval trace
 2. 在 `packages/shared` 继续稳定 `Document`、`Chunk`、`RetrievalResult` 等契约
 3. 在 `apps/web` 拆分出 `/learn`、`/lab/ingest` 等具体页面
-4. 再引入检索评估、rerank 和生成阶段的对照实验能力
+4. 再引入 rerank、答案生成和检索评估的对照实验能力

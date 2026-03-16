@@ -16,6 +16,7 @@ from .document_chunks import (
 )
 from .documents import delete_document, get_document, list_documents, save_document
 from .index_builds import create_index_build, delete_index_builds_for_chunk_set, get_index_build, list_index_builds
+from .retrieval import search_index_build
 from .schemas import (
     ChunkRunCatalogResponse,
     ChunkRunRecord,
@@ -32,6 +33,8 @@ from .schemas import (
     SaveDocumentChunkSetRequest,
     SaveChunkRunRequest,
     SaveDocumentRequest,
+    SearchIndexBuildRequest,
+    SearchIndexBuildResponse,
     UpdateDocumentChunkSetRequest,
 )
 
@@ -173,6 +176,14 @@ def get_index_build_by_id(build_id: str) -> IndexBuildRecord:
     if record is None:
         raise HTTPException(status_code=404, detail="Index build not found.")
     return record
+
+
+@app.post("/api/v1/index-builds/{build_id}/search", response_model=SearchIndexBuildResponse)
+def search_index(build_id: str, payload: SearchIndexBuildRequest) -> SearchIndexBuildResponse:
+    response = search_index_build(build_id, payload)
+    if response is None:
+        raise HTTPException(status_code=404, detail="Index build not found.")
+    return response
 
 
 @app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)

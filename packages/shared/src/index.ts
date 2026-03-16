@@ -247,3 +247,33 @@ export type IndexBuildRecord = {
 export type IndexBuildCatalogResponse = {
   builds: IndexBuildSummary[];
 };
+
+export type SearchIndexBuildRequest = {
+  query: string;
+  topK?: number;
+};
+
+export type SearchResult = {
+  chunkId: string;
+  documentId: string;
+  rank: number;
+  score: number;
+  text: string;
+  tokenCount: number;
+  startOffset: number;
+  endOffset: number;
+};
+
+export type SearchIndexBuildResponse = {
+  buildId: string;
+  chunkSetId: string;
+  documentId: string;
+  documentTitle: string;
+  chunkSetLabel: string;
+  embeddingModel: string;
+  vectorDimensions: number;
+  query: string;
+  queryTerms: string[];
+  topK: number;
+  results: SearchResult[];
+};

@@ -61,11 +61,11 @@ def _to_summary(record: IndexBuildRecord) -> IndexBuildSummary:
     )
 
 
-def _tokenize(text: str) -> list[str]:
+def tokenize_for_embedding(text: str) -> list[str]:
     return [match.group(0).lower() for match in TOKEN_PATTERN.finditer(text)]
 
 
-def _hash_embedding(tokens: list[str], dimensions: int) -> list[float]:
+def build_hash_embedding(tokens: list[str], dimensions: int) -> list[float]:
     vector = [0.0] * dimensions
     frequencies = Counter(tokens)
 
@@ -108,7 +108,7 @@ def create_index_build(chunk_set_id: str, payload: CreateIndexBuildRequest) -> I
     chunk_vectors: list[ChunkVectorRecord] = []
 
     for chunk in chunk_set.preview_response.chunks:
-        tokens = _tokenize(chunk.text)
+        tokens = tokenize_for_embedding(chunk.text)
         token_counter.update(tokens)
         token_totals.append(chunk.tokenCount)
         chunk_vectors.append(
@@ -117,7 +117,7 @@ def create_index_build(chunk_set_id: str, payload: CreateIndexBuildRequest) -> I
                 tokenCount=chunk.tokenCount,
                 startOffset=chunk.startOffset,
                 endOffset=chunk.endOffset,
-                values=_hash_embedding(tokens, payload.vector_dimensions),
+                values=build_hash_embedding(tokens, payload.vector_dimensions),
             )
         )
 
