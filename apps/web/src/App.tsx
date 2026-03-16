@@ -77,6 +77,7 @@ type PreviewStatus = "idle" | "loading" | "success" | "error";
 type AppRoute = "learn" | "lab";
 type GuideStepId = "document" | "preview" | "results" | "index" | "search" | "trace";
 type LabPresetId = "balanced" | "fine-grained" | "strict-filter";
+type ComparisonSlotId = "A" | "B";
 
 function getRouteFromPathname(pathname: string): AppRoute {
   if (pathname === ROUTE_PATHS.lab) {
@@ -109,6 +110,32 @@ type LabPreset = {
   topK: number;
   scoreThreshold: number;
   expected: string;
+};
+
+type ComparisonSnapshot = {
+  slotId: ComparisonSlotId;
+  capturedAt: string;
+  documentTitle: string;
+  presetLabel: string;
+  chunkSize: number;
+  chunkOverlap: number;
+  totalChunks: number;
+  averageChunkLength: number;
+  charCount: number;
+  chunkSetLabel: string | null;
+  embeddingModel: string | null;
+  vectorDimensions: number | null;
+  search:
+    | {
+        query: string;
+        topK: number;
+        scoreThreshold: number;
+        resultCount: number;
+        topScore: number | null;
+        queryTerms: string[];
+        topResults: SearchIndexBuildResponse["results"];
+      }
+    | null;
 };
 
 const LAB_PRESETS: LabPreset[] = [
@@ -198,6 +225,10 @@ export default function App() {
   const [selectedPresetId, setSelectedPresetId] = useState<LabPresetId | null>("balanced");
   const [activeRoute, setActiveRoute] = useState<AppRoute>(() => getRouteFromPathname(globalThis.location?.pathname ?? "/learn"));
   const [pendingScrollTargetId, setPendingScrollTargetId] = useState<string | null>(null);
+  const [comparisonSlots, setComparisonSlots] = useState<Record<ComparisonSlotId, ComparisonSnapshot | null>>({
+    A: null,
+    B: null,
+  });
 
   useEffect(() => {
     const nextRoute = getRouteFromPathname(globalThis.location?.pathname ?? "/learn");
@@ -1191,6 +1222,14 @@ export default function App() {
       meta: selectedTraceSummary ? `${selectedTraceSummary.totalResults} results` : "保存检索轨迹后可回放",
     },
   ];
+  const comparisonReady = Boolean(previewResult);
+  const comparisonPairReady = Boolean(comparisonSlots.A && comparisonSlots.B);
+  const chunkDelta =
+    comparisonSlots.A && comparisonSlots.B ? comparisonSlots.B.totalChunks - comparisonSlots.A.totalChunks : null;
+  const searchDelta =
+    comparisonSlots.A?.search && comparisonSlots.B?.search
+      ? comparisonSlots.B.search.resultCount - comparisonSlots.A.search.resultCount
+      : null;
 
   useEffect(() => {
     const activeStep = guideSteps.find((step) => step.id === activeGuideStepId);
@@ -1247,6 +1286,57 @@ export default function App() {
     if (targetId) {
       setPendingScrollTargetId(targetId);
     }
+  }
+
+  function buildComparisonSnapshot(slotId: ComparisonSlotId): ComparisonSnapshot | null {
+    if (!previewResult) {
+      return null;
+    }
+
+    return {
+      slotId,
+      capturedAt: new Date().toISOString(),
+      documentTitle: selectedDocumentSummary?.title ?? previewRequest.title,
+      presetLabel: selectedPreset?.label ?? "自定义参数",
+      chunkSize: previewRequest.chunkSize,
+      chunkOverlap: previewRequest.chunkOverlap,
+      totalChunks: previewResult.stats.totalChunks,
+      averageChunkLength: previewResult.stats.averageChunkLength,
+      charCount: previewResult.document.charCount,
+      chunkSetLabel: selectedChunkSetSummary?.label ?? null,
+      embeddingModel: selectedIndexBuildSummary?.embeddingModel ?? null,
+      vectorDimensions: selectedIndexBuildSummary?.vectorDimensions ?? null,
+      search: searchResult
+        ? {
+            query: searchResult.query,
+            topK: searchResult.topK,
+            scoreThreshold: searchResult.scoreThreshold,
+            resultCount: searchResult.results.length,
+            topScore: searchResult.results[0]?.score ?? null,
+            queryTerms: searchResult.queryTerms,
+            topResults: searchResult.results.slice(0, 2),
+          }
+        : null,
+    };
+  }
+
+  function pinComparisonSlot(slotId: ComparisonSlotId) {
+    const snapshot = buildComparisonSnapshot(slotId);
+    if (!snapshot) {
+      return;
+    }
+
+    setComparisonSlots((current) => ({
+      ...current,
+      [slotId]: snapshot,
+    }));
+  }
+
+  function clearComparisonSlot(slotId: ComparisonSlotId) {
+    setComparisonSlots((current) => ({
+      ...current,
+      [slotId]: null,
+    }));
   }
 
   function getGuideStepState(step: GuideStep) {
@@ -1332,6 +1422,68 @@ export default function App() {
           </div>
         )}
       </section>
+    );
+  }
+
+  function renderComparisonSlot(slotId: ComparisonSlotId) {
+    const snapshot = comparisonSlots[slotId];
+
+    if (!snapshot) {
+      return (
+        <article className="compare-card compare-card--empty">
+          <div className="compare-card__header">
+            <span>Slot {slotId}</span>
+            <strong>等待固定</strong>
+          </div>
+          <p>先在 preview 或检索结果处点击“固定到对照 {slotId}”。</p>
+        </article>
+      );
+    }
+
+    return (
+      <article className="compare-card">
+        <div className="compare-card__header">
+          <span>Slot {slotId}</span>
+          <strong>{snapshot.documentTitle}</strong>
+        </div>
+        <p>{snapshot.presetLabel}</p>
+        <div className="compare-card__stats">
+          <span>
+            chunk {snapshot.chunkSize}/{snapshot.chunkOverlap}
+          </span>
+          <span>{snapshot.totalChunks} chunks</span>
+          <span>{snapshot.averageChunkLength} avg chars</span>
+        </div>
+        <p className="helper-text">{snapshot.chunkSetLabel ? `chunk set: ${snapshot.chunkSetLabel}` : "尚未保存为 chunk 集合"}</p>
+        <p className="helper-text">
+          {snapshot.embeddingModel ? `${snapshot.embeddingModel} / ${snapshot.vectorDimensions} dims` : "尚未建立索引"}
+        </p>
+        {snapshot.search ? (
+          <div className="compare-result-list">
+            <p className="helper-text">
+              query: {snapshot.search.query} · {snapshot.search.resultCount} results · threshold{" "}
+              {snapshot.search.scoreThreshold.toFixed(2)}
+            </p>
+            {snapshot.search.topResults.map((result) => (
+              <article key={`${slotId}-${result.chunkId}`} className="compare-result-card">
+                <div className="chunk-card__meta">
+                  <strong>Rank {result.rank}</strong>
+                  <span>{result.score.toFixed(4)}</span>
+                  <span>{result.tokenCount} tokens</span>
+                </div>
+                <pre>{result.text}</pre>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="helper-text">这个快照还没有运行检索。</p>
+        )}
+        <div className="lab-actions">
+          <button type="button" className="secondary-button" onClick={() => clearComparisonSlot(slotId)}>
+            清空 {slotId}
+          </button>
+        </div>
+      </article>
     );
   }
 
@@ -1477,6 +1629,37 @@ export default function App() {
             <strong>{selectedPreset?.label ?? "自定义参数"}</strong>
             <p>{selectedPreset?.expected ?? "你正在使用自定义实验参数。"}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="section compare-board">
+        <div className="section__heading">
+          <p className="eyebrow">Comparison</p>
+          <h2>把两次实验固定下来，直接看差异</h2>
+          <p>对照面板适合比较不同 chunk 参数、不同 query 或不同 threshold 的结果。先固定到 A，再调整参数后固定到 B。</p>
+        </div>
+
+        <div className="compare-summary">
+          <article className="compare-summary__card">
+            <span>可固定状态</span>
+            <strong>{comparisonReady ? "Ready" : "Waiting"}</strong>
+            <p>{comparisonReady ? "当前 preview 已可固定到对照槽位。" : "先生成一次 preview，再固定到 A/B。"}</p>
+          </article>
+          <article className="compare-summary__card">
+            <span>Chunk 差值</span>
+            <strong>{chunkDelta === null ? "—" : `${chunkDelta > 0 ? "+" : ""}${chunkDelta}`}</strong>
+            <p>{comparisonPairReady ? "B 相比 A 的 chunk 数变化。" : "填满 A/B 两个槽位后显示。"}</p>
+          </article>
+          <article className="compare-summary__card">
+            <span>检索差值</span>
+            <strong>{searchDelta === null ? "—" : `${searchDelta > 0 ? "+" : ""}${searchDelta}`}</strong>
+            <p>{searchDelta === null ? "两边都运行检索后会显示结果数差异。" : "B 相比 A 的结果数变化。"}</p>
+          </article>
+        </div>
+
+        <div className="compare-grid">
+          {renderComparisonSlot("A")}
+          {renderComparisonSlot("B")}
         </div>
       </section>
 
@@ -2107,6 +2290,12 @@ export default function App() {
                       >
                         {retrievalTraceStatus === "loading" ? "保存中..." : "保存检索轨迹"}
                       </button>
+                      <button type="button" className="secondary-button" disabled={!previewResult} onClick={() => pinComparisonSlot("A")}>
+                        固定到对照 A
+                      </button>
+                      <button type="button" className="secondary-button" disabled={!previewResult} onClick={() => pinComparisonSlot("B")}>
+                        固定到对照 B
+                      </button>
                       <p className="helper-text">当前 query 会用和索引相同的 `demo-hash` 语义骨架向量化，再与 chunk 向量做相似度排序。</p>
                     </div>
 
@@ -2258,6 +2447,12 @@ export default function App() {
                 onClick={() => void handleSaveDocumentChunkSet()}
               >
                 {chunkSetSaveStatus === "loading" ? "保存中..." : "保存为文档级 chunk 集合"}
+              </button>
+              <button className="secondary-button" type="button" disabled={!previewResult} onClick={() => pinComparisonSlot("A")}>
+                固定到对照 A
+              </button>
+              <button className="secondary-button" type="button" disabled={!previewResult} onClick={() => pinComparisonSlot("B")}>
+                固定到对照 B
               </button>
             </div>
 
