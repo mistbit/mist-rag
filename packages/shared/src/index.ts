@@ -194,3 +194,56 @@ export type DocumentChunkSetRecord = {
 export type DocumentChunkSetCatalogResponse = {
   sets: DocumentChunkSetSummary[];
 };
+
+export type CreateIndexBuildRequest = {
+  embeddingModel?: string;
+  vectorDimensions?: number;
+};
+
+export type IndexBuildStatus = "ready";
+
+export type ChunkVectorRecord = {
+  chunkId: string;
+  tokenCount: number;
+  startOffset: number;
+  endOffset: number;
+  values: number[];
+};
+
+export type IndexBuildSummary = {
+  id: string;
+  chunkSetId: string;
+  documentId: string;
+  documentTitle: string;
+  chunkSetLabel: string;
+  status: IndexBuildStatus;
+  embeddingModel: string;
+  vectorDimensions: number;
+  totalVectors: number;
+  vocabularySize: number;
+  averageTokenCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IndexBuildRecord = {
+  id: string;
+  chunkSetId: string;
+  documentId: string;
+  documentTitle: string;
+  chunkSetLabel: string;
+  status: IndexBuildStatus;
+  embeddingModel: string;
+  vectorDimensions: number;
+  totalVectors: number;
+  vocabularySize: number;
+  averageTokenCount: number;
+  createdAt: string;
+  updatedAt: string;
+  topTerms: string[];
+  chunkVectors: ChunkVectorRecord[];
+};
+
+export type IndexBuildCatalogResponse = {
+  builds: IndexBuildSummary[];
+};

@@ -207,8 +207,11 @@ class UpdateDocumentChunkSetRequest(BaseModel):
 
     @field_validator("label", "notes")
     @classmethod
-    def normalize_update_field(cls, value: str) -> str:
-        return value.strip()
+    def normalize_update_field(cls, value: str, info) -> str:
+        normalized = value.strip()
+        if info.field_name == "label" and not normalized:
+            raise ValueError("label must not be blank.")
+        return normalized
 
 
 class DocumentChunkSetSummary(BaseModel):
@@ -242,3 +245,73 @@ class DocumentChunkSetRecord(BaseModel):
 
 class DocumentChunkSetCatalogResponse(BaseModel):
     sets: list[DocumentChunkSetSummary]
+
+
+IndexBuildStatus = Literal["ready"]
+
+
+class CreateIndexBuildRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    embedding_model: str = Field(alias="embeddingModel", default="demo-hash-v1", min_length=1, max_length=80)
+    vector_dimensions: int = Field(alias="vectorDimensions", default=12, ge=4, le=64)
+
+    @field_validator("embedding_model")
+    @classmethod
+    def normalize_embedding_model(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("embeddingModel must not be blank.")
+        return normalized
+
+
+class ChunkVectorRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    chunk_id: str = Field(alias="chunkId")
+    token_count: int = Field(alias="tokenCount")
+    start_offset: int = Field(alias="startOffset")
+    end_offset: int = Field(alias="endOffset")
+    values: list[float]
+
+
+class IndexBuildSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    chunk_set_id: str = Field(alias="chunkSetId")
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    chunk_set_label: str = Field(alias="chunkSetLabel")
+    status: IndexBuildStatus
+    embedding_model: str = Field(alias="embeddingModel")
+    vector_dimensions: int = Field(alias="vectorDimensions")
+    total_vectors: int = Field(alias="totalVectors")
+    vocabulary_size: int = Field(alias="vocabularySize")
+    average_token_count: int = Field(alias="averageTokenCount")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+
+class IndexBuildRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    chunk_set_id: str = Field(alias="chunkSetId")
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    chunk_set_label: str = Field(alias="chunkSetLabel")
+    status: IndexBuildStatus
+    embedding_model: str = Field(alias="embeddingModel")
+    vector_dimensions: int = Field(alias="vectorDimensions")
+    total_vectors: int = Field(alias="totalVectors")
+    vocabulary_size: int = Field(alias="vocabularySize")
+    average_token_count: int = Field(alias="averageTokenCount")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+    top_terms: list[str] = Field(alias="topTerms")
+    chunk_vectors: list[ChunkVectorRecord] = Field(alias="chunkVectors")
+
+
+class IndexBuildCatalogResponse(BaseModel):
+    builds: list[IndexBuildSummary]

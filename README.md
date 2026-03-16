@@ -1,11 +1,11 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注”的 ingest 闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1 和阶段 2 的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录”的实验闭环。
 
 ## 当前内容
 
 - `apps/web`: React + Vite 学习首页，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
-- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览、chunk 历史和文档级 chunk 集合接口
+- `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览、chunk 历史、文档级 chunk 集合和索引构建接口
 - `packages/shared`: 前后端共享的基础类型定义与学习首页单一数据源 `rag-overview.json`
 - `datasets/demo-corpus`: 供实验区直接载入的样例文档
 - `docs`: 产品规划与架构说明
@@ -20,6 +20,7 @@
 - 当前 preview 结果可保存成 chunk 历史记录，并可重新载入当时的参数和结果
 - 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
 - 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除、命名和备注
+- 可基于某个文档级 chunk 集合构建索引记录，观察向量维度、词表规模和基础 embedding 状态
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -84,14 +85,17 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/documents`
 - `GET /api/v1/documents/{document_id}`
 - `GET /api/v1/documents/{document_id}/chunk-sets`
+- `GET /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `POST /api/v1/documents`
 - `POST /api/v1/documents/{document_id}/chunk-sets`
+- `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
 - `POST /api/v1/chunk-runs`
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
+- `GET /api/v1/index-builds/{build_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
 - `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
@@ -131,6 +135,12 @@ uvicorn app.main:app --reload --port 8000
 - `chunk-runs` 记录一次实验轨迹，可以不绑定文档
 - `chunk-sets` 必须绑定某个文档，适合保存相对稳定的切块结果
 
+索引构建记录说明：
+
+- `index-builds` 绑定某个 `chunk-set`，表示某组稳定 chunk 在特定 embedding 配置下的一次索引快照
+- 当前实现使用本地 `demo-hash-v1` 向量化骨架，重点是把索引状态、向量维度和基础统计稳定下来
+- 删除 chunk 集合时，会级联删除它下面的索引构建记录
+
 删除规则：
 
 - 删除 `saved` 文档时，会级联清理这个文档下的 chunk 集合
@@ -140,6 +150,15 @@ uvicorn app.main:app --reload --port 8000
 
 - 创建 chunk 集合时，如果未传 `label`，系统会用 `文档标题 · chunkSize/chunkOverlap` 生成默认名称
 - `notes` 用于记录为什么要保留这组切块结果
+
+`POST /api/v1/chunk-sets/{chunk_set_id}/index-builds` 请求示例：
+
+```json
+{
+  "embeddingModel": "demo-hash-v1",
+  "vectorDimensions": 12
+}
+```
 
 `POST /api/v1/documents` 请求示例：
 
@@ -181,9 +200,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成文档级 chunk 集合命名备注之后，下一步建议继续推进文档摄取：
+完成索引构建骨架之后，下一步建议继续推进 embedding / retrieval：
 
-1. 把 `Chunk` 持久化和文档保存真正关联起来
-2. 为文档和 chunk 集合增加更新时间与筛选能力
-3. 引入真正的 dataset 管理与状态页
-4. 再进入 embedding 和索引构建
+1. 把 `demo-hash` 替换成真实 embedding provider
+2. 基于 `index-builds` 增加 query 向量化和 top-k 检索接口
+3. 为索引记录补删除 / 重建和状态追踪
+4. 引入真正的 dataset 管理与状态页

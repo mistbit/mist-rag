@@ -1,4 +1,4 @@
-# Mist RAG Sprint 4.5 Architecture
+# Mist RAG Sprint 5 Architecture
 
 ## 目标
 
@@ -14,8 +14,9 @@
 - 增加文档级 chunk 集合，把切块结果真正绑定到文档
 - 增加文档级 chunk 集合的删除管理
 - 增加文档级 chunk 集合的命名与备注
+- 增加索引构建记录，作为 embedding / index 阶段的最小骨架
 
-这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的第一步真正变成一个可运行闭环。
+这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的摄取闭环和阶段 2 的索引骨架接起来。
 
 ## 目录结构
 
@@ -39,7 +40,7 @@ mist-rag/
 - `src/index.ts` 定义前端使用的类型
 - `rag-overview.json` 存储学习首页与 API 的公共内容
 
-这样前端渲染和 API 返回不会各自维护一份重复数据，同时文档目录、切块预览和历史记录的请求 / 响应结构也保持明确。
+这样前端渲染和 API 返回不会各自维护一份重复数据，同时文档目录、切块预览、chunk 集合和索引构建的请求 / 响应结构也保持明确。
 
 ### `datasets/demo-corpus`
 
@@ -51,7 +52,7 @@ mist-rag/
 
 ### `services/api`
 
-FastAPI 服务当前承担九类能力：
+FastAPI 服务当前承担十二类能力：
 
 - 输出健康状态，便于前端或后续容器探活
 - 读取共享 JSON，暴露统一的 `overview` 数据
@@ -63,6 +64,9 @@ FastAPI 服务当前承担九类能力：
 - 保存并读取文档级 chunk 集合
 - 删除文档级 chunk 集合，并在文档删除时级联清理
 - 更新文档级 chunk 集合的名称和备注
+- 基于 chunk 集合构建索引记录
+- 列出某个 chunk 集合下的索引构建历史
+- 读取单条索引构建详情
 
 其中切块逻辑仍然保持“轻实现”：
 
@@ -76,6 +80,7 @@ FastAPI 服务当前承担九类能力：
 - 用户保存的文档写入 `services/api/storage/documents.json`
 - chunk 历史记录写入 `services/api/storage/chunk_runs.json`
 - 文档级 chunk 集合写入 `services/api/storage/document_chunk_sets.json`
+- 索引构建记录写入 `services/api/storage/index_builds.json`
 - 暂时不引入 SQLite
 
 删除策略当前保持简单：
@@ -84,8 +89,9 @@ FastAPI 服务当前承担九类能力：
 - 样例文档属于受版本控制的数据集，不允许从 API 删除
 - 删除 chunk 历史不会联动删除文档
 - 删除文档会级联删除它的文档级 chunk 集合
-- 删除文档级 chunk 集合不会删除文档
+- 删除文档级 chunk 集合不会删除文档，但会级联删除相关索引构建记录
 - 文档级 chunk 集合默认会生成系统名称，但支持后续人工命名和备注
+- 当前索引构建采用本地 `demo-hash-v1` 骨架，不依赖外部模型服务
 
 ### `apps/web`
 
@@ -101,6 +107,7 @@ Web 端当前承担两层职责：
 - 提供文档级 chunk 集合，让切块结果开始和具体文档建立稳定关系
 - 提供文档级 chunk 集合删除，让这一层能力也具备基础维护能力
 - 提供文档级 chunk 集合名称和备注，方便区分不同切块策略
+- 提供索引构建面板，让用户观察向量维度、词表规模、高频词和 chunk 向量快照
 
 前端会优先请求 API；如果 API 未启动，则首页总览仍会退回本地 JSON。切块实验区则依赖真实 API。
 
@@ -128,14 +135,17 @@ apps/web/src/App.tsx
   ├─> GET /api/v1/documents
   ├─> GET /api/v1/documents/{id}
   ├─> GET /api/v1/documents/{id}/chunk-sets
+  ├─> GET /api/v1/chunk-sets/{id}/index-builds
   ├─> POST /api/v1/documents
   ├─> POST /api/v1/documents/{id}/chunk-sets
+  ├─> POST /api/v1/chunk-sets/{id}/index-builds
   ├─> DELETE /api/v1/documents/{id}
   ├─> GET /api/v1/chunk-runs
   ├─> GET /api/v1/chunk-runs/{id}
   ├─> POST /api/v1/chunk-runs
   ├─> DELETE /api/v1/chunk-runs/{id}
   ├─> GET /api/v1/chunk-sets/{id}
+  ├─> GET /api/v1/index-builds/{id}
   ├─> DELETE /api/v1/chunk-sets/{id}
   ├─> PATCH /api/v1/chunk-sets/{id}
   └─> POST /api/v1/chunk-preview
@@ -146,6 +156,8 @@ apps/web/src/App.tsx
         │     └─> services/api/storage/chunk_runs.json
         ├─> services/api/app/document_chunks.py
         │     └─> services/api/storage/document_chunk_sets.json
+        ├─> services/api/app/index_builds.py
+        │     └─> services/api/storage/index_builds.json
         └─> services/api/app/chunking.py
               └─> 返回 ChunkPreviewResponse
 ```
@@ -154,7 +166,7 @@ apps/web/src/App.tsx
 
 当进入阶段 1 和阶段 2 时，建议沿着下面的方向扩展：
 
-1. 在 `services/api` 增加 PDF 解析和后续向量索引入口
+1. 在 `services/api` 把 `demo-hash` 替换成真实 embedding provider，并接入检索接口
 2. 在 `packages/shared` 继续稳定 `Document`、`Chunk`、`RetrievalResult` 等契约
 3. 在 `apps/web` 拆分出 `/learn`、`/lab/ingest` 等具体页面
-4. 再引入真正的向量索引、模型 provider 和评估能力
+4. 再引入检索评估、rerank 和生成阶段的对照实验能力

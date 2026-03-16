@@ -15,15 +15,19 @@ from .document_chunks import (
     update_document_chunk_set,
 )
 from .documents import delete_document, get_document, list_documents, save_document
+from .index_builds import create_index_build, delete_index_builds_for_chunk_set, get_index_build, list_index_builds
 from .schemas import (
     ChunkRunCatalogResponse,
     ChunkRunRecord,
     ChunkPreviewRequest,
     ChunkPreviewResponse,
+    CreateIndexBuildRequest,
     DocumentChunkSetCatalogResponse,
     DocumentChunkSetRecord,
     DocumentCatalogResponse,
     DocumentRecord,
+    IndexBuildCatalogResponse,
+    IndexBuildRecord,
     RagOverview,
     SaveDocumentChunkSetRequest,
     SaveChunkRunRequest,
@@ -91,10 +95,13 @@ def remove_document(document_id: str) -> dict[str, str]:
     if document_id.startswith("sample-"):
         raise HTTPException(status_code=400, detail="Sample documents cannot be deleted.")
 
+    chunk_set_ids = [summary.id for summary in list_document_chunk_sets(document_id).sets]
     deleted = delete_document(document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")
     delete_document_chunk_sets_for_document(document_id)
+    for chunk_set_id in chunk_set_ids:
+        delete_index_builds_for_chunk_set(chunk_set_id)
     return {"status": "deleted", "id": document_id}
 
 
@@ -127,11 +134,28 @@ def get_document_chunk_set_by_id(chunk_set_id: str) -> DocumentChunkSetRecord:
     return record
 
 
+@app.get("/api/v1/chunk-sets/{chunk_set_id}/index-builds", response_model=IndexBuildCatalogResponse)
+def get_chunk_set_index_builds(chunk_set_id: str) -> IndexBuildCatalogResponse:
+    record = get_document_chunk_set(chunk_set_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    return list_index_builds(chunk_set_id)
+
+
+@app.post("/api/v1/chunk-sets/{chunk_set_id}/index-builds", response_model=IndexBuildRecord)
+def create_chunk_set_index_build(chunk_set_id: str, payload: CreateIndexBuildRequest) -> IndexBuildRecord:
+    record = create_index_build(chunk_set_id, payload)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    return record
+
+
 @app.delete("/api/v1/chunk-sets/{chunk_set_id}")
 def remove_document_chunk_set(chunk_set_id: str) -> dict[str, str]:
     deleted = delete_document_chunk_set(chunk_set_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    delete_index_builds_for_chunk_set(chunk_set_id)
     return {"status": "deleted", "id": chunk_set_id}
 
 
@@ -140,6 +164,14 @@ def update_chunk_set(chunk_set_id: str, payload: UpdateDocumentChunkSetRequest) 
     record = update_document_chunk_set(chunk_set_id, payload)
     if record is None:
         raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    return record
+
+
+@app.get("/api/v1/index-builds/{build_id}", response_model=IndexBuildRecord)
+def get_index_build_by_id(build_id: str) -> IndexBuildRecord:
+    record = get_index_build(build_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Index build not found.")
     return record
 
 

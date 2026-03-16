@@ -5,10 +5,13 @@ import type {
   ChunkPreviewResponse,
   ChunkRunCatalogResponse,
   ChunkRunRecord,
+  CreateIndexBuildRequest,
   DocumentCatalogResponse,
   DocumentChunkSetCatalogResponse,
   DocumentChunkSetRecord,
   DocumentRecord,
+  IndexBuildCatalogResponse,
+  IndexBuildRecord,
   RagOverview,
 } from "@mist-rag/shared";
 import fallbackOverview from "@mist-rag/data";
@@ -47,6 +50,15 @@ const EMPTY_CHUNK_SET_CATALOG: DocumentChunkSetCatalogResponse = {
   sets: [],
 };
 
+const EMPTY_INDEX_BUILD_CATALOG: IndexBuildCatalogResponse = {
+  builds: [],
+};
+
+const DEFAULT_INDEX_BUILD_REQUEST: CreateIndexBuildRequest = {
+  embeddingModel: "demo-hash-v1",
+  vectorDimensions: 12,
+};
+
 type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
@@ -63,9 +75,13 @@ export default function App() {
   const [chunkSetCatalog, setChunkSetCatalog] = useState<DocumentChunkSetCatalogResponse>(EMPTY_CHUNK_SET_CATALOG);
   const [chunkSetCatalogStatus, setChunkSetCatalogStatus] = useState<AsyncStatus>("idle");
   const [chunkSetCatalogError, setChunkSetCatalogError] = useState("");
+  const [indexBuildCatalog, setIndexBuildCatalog] = useState<IndexBuildCatalogResponse>(EMPTY_INDEX_BUILD_CATALOG);
+  const [indexBuildCatalogStatus, setIndexBuildCatalogStatus] = useState<AsyncStatus>("idle");
+  const [indexBuildCatalogError, setIndexBuildCatalogError] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedChunkSetId, setSelectedChunkSetId] = useState<string | null>(null);
+  const [selectedIndexBuildId, setSelectedIndexBuildId] = useState<string | null>(null);
   const [previewRequest, setPreviewRequest] = useState<ChunkPreviewRequest>(DEFAULT_REQUEST);
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
   const [previewError, setPreviewError] = useState("");
@@ -78,6 +94,10 @@ export default function App() {
   const [chunkSetSaveMessage, setChunkSetSaveMessage] = useState("");
   const [chunkSetLabelDraft, setChunkSetLabelDraft] = useState("");
   const [chunkSetNotesDraft, setChunkSetNotesDraft] = useState("");
+  const [indexBuildActionStatus, setIndexBuildActionStatus] = useState<AsyncStatus>("idle");
+  const [indexBuildActionMessage, setIndexBuildActionMessage] = useState("");
+  const [indexBuildRequest, setIndexBuildRequest] = useState<CreateIndexBuildRequest>(DEFAULT_INDEX_BUILD_REQUEST);
+  const [selectedIndexBuild, setSelectedIndexBuild] = useState<IndexBuildRecord | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +192,25 @@ export default function App() {
     }
   }
 
+  async function loadIndexBuildCatalog(chunkSetId: string) {
+    setIndexBuildCatalogStatus("loading");
+    setIndexBuildCatalogError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-sets/${chunkSetId}/index-builds`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const data = (await response.json()) as IndexBuildCatalogResponse;
+      setIndexBuildCatalog(data);
+      setIndexBuildCatalogStatus("online");
+    } catch (error) {
+      setIndexBuildCatalogStatus("error");
+      setIndexBuildCatalogError(error instanceof Error ? error.message : "Unable to load index builds.");
+    }
+  }
+
   function clearDocumentChunkSets() {
     setChunkSetCatalog(EMPTY_CHUNK_SET_CATALOG);
     setChunkSetCatalogStatus("idle");
@@ -181,6 +220,17 @@ export default function App() {
     setChunkSetSaveMessage("");
     setChunkSetLabelDraft("");
     setChunkSetNotesDraft("");
+    clearIndexBuilds();
+  }
+
+  function clearIndexBuilds() {
+    setIndexBuildCatalog(EMPTY_INDEX_BUILD_CATALOG);
+    setIndexBuildCatalogStatus("idle");
+    setIndexBuildCatalogError("");
+    setSelectedIndexBuildId(null);
+    setSelectedIndexBuild(null);
+    setIndexBuildActionStatus("idle");
+    setIndexBuildActionMessage("");
   }
 
   async function runPreview(request: ChunkPreviewRequest) {
@@ -287,6 +337,7 @@ export default function App() {
       setRunSaveMessage("");
       setChunkSetSaveStatus("idle");
       setChunkSetSaveMessage("");
+      clearIndexBuilds();
       await loadDocumentChunkSets(document.id);
       await runPreview(nextRequest);
     } catch (error) {
@@ -317,6 +368,7 @@ export default function App() {
       } else {
         clearDocumentChunkSets();
       }
+      clearIndexBuilds();
     } catch (error) {
       setRunSaveStatus("error");
       setRunSaveMessage(error instanceof Error ? error.message : "Unable to load chunk run.");
@@ -342,9 +394,29 @@ export default function App() {
       setChunkSetNotesDraft(record.notes);
       setChunkSetSaveStatus("saved");
       setChunkSetSaveMessage("已载入文档级 chunk 集合。");
+      clearIndexBuilds();
+      await loadIndexBuildCatalog(record.id);
     } catch (error) {
       setChunkSetSaveStatus("error");
       setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to load document chunk set.");
+    }
+  }
+
+  async function handleIndexBuildSelect(buildId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/index-builds/${buildId}`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as IndexBuildRecord;
+      setSelectedIndexBuildId(record.id);
+      setSelectedIndexBuild(record);
+      setIndexBuildActionStatus("saved");
+      setIndexBuildActionMessage("已载入索引构建记录。");
+    } catch (error) {
+      setIndexBuildActionStatus("error");
+      setIndexBuildActionMessage(error instanceof Error ? error.message : "Unable to load index build.");
     }
   }
 
@@ -370,6 +442,7 @@ export default function App() {
         setSelectedChunkSetId(null);
         setChunkSetLabelDraft("");
         setChunkSetNotesDraft("");
+        clearIndexBuilds();
       }
 
       setChunkSetSaveStatus("saved");
@@ -555,6 +628,7 @@ export default function App() {
       setPreviewRequest(record.previewRequest);
       setPreviewResult(record.previewResponse);
       setPreviewStatus("success");
+      clearIndexBuilds();
       await loadDocumentChunkSets(record.documentId);
     } catch (error) {
       setChunkSetSaveStatus("error");
@@ -598,6 +672,40 @@ export default function App() {
     } catch (error) {
       setChunkSetSaveStatus("error");
       setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to update document chunk set.");
+    }
+  }
+
+  async function handleCreateIndexBuild() {
+    if (!selectedChunkSetId) {
+      return;
+    }
+
+    setIndexBuildActionStatus("loading");
+    setIndexBuildActionMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-sets/${selectedChunkSetId}/index-builds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(indexBuildRequest),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as IndexBuildRecord;
+      setSelectedIndexBuildId(record.id);
+      setSelectedIndexBuild(record);
+      setIndexBuildActionStatus("saved");
+      setIndexBuildActionMessage(`已构建索引 ${record.id}`);
+      await loadIndexBuildCatalog(record.chunkSetId);
+    } catch (error) {
+      setIndexBuildActionStatus("error");
+      setIndexBuildActionMessage(error instanceof Error ? error.message : "Unable to create index build.");
     }
   }
 
@@ -651,7 +759,7 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 3.5 / Document chunk sets</p>
+          <p className="eyebrow">Sprint 4 / Index build skeleton</p>
           <h1>{overview.hero.title}</h1>
           <p className="hero__subtitle">{overview.hero.subtitle}</p>
         </div>
@@ -660,8 +768,9 @@ export default function App() {
           <h2>当前交付边界</h2>
           <ul>
             <li>保留学习首页、文档库、preview 与 chunk 历史</li>
-            <li>新增文档级 chunk 集合，把切块结果真正绑定到文档</li>
-            <li>同一页里可以在文档、文档级集合和历史记录之间切换</li>
+            <li>文档级 chunk 集合继续作为稳定输入层</li>
+            <li>新增索引构建记录，观察向量维度、词表规模和构建状态</li>
+            <li>同一页里可以在文档、chunk 集合、索引记录和历史之间切换</li>
           </ul>
         </div>
       </section>
@@ -697,7 +806,7 @@ export default function App() {
       <section className="section lab">
         <div className="section__heading">
           <p className="eyebrow">Ingest lab</p>
-          <h2>文档、preview、历史与文档级 chunk 集合形成第二层闭环</h2>
+          <h2>文档、chunk 集合与索引构建形成第三层闭环</h2>
         </div>
 
         <div className="lab__grid">
@@ -876,6 +985,153 @@ export default function App() {
                   ))}
                 </div>
               )}
+            </section>
+
+            <section className="lab-panel">
+              <div className="lab-result__header">
+                <div>
+                  <p className="eyebrow">Index builds</p>
+                  <h3>当前 chunk 集合的索引构建记录</h3>
+                </div>
+                <span className={`status-pill status-pill--${indexBuildCatalogStatus === "error" ? "fallback" : "online"}`}>
+                  {indexBuildCatalogStatus}
+                </span>
+              </div>
+
+              <div className="lab-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!selectedChunkSetId}
+                  onClick={() => (selectedChunkSetId ? void loadIndexBuildCatalog(selectedChunkSetId) : undefined)}
+                >
+                  刷新索引记录
+                </button>
+                <p className="helper-text">
+                  {selectedChunkSetId
+                    ? "这里展示同一 chunk 集合在不同 embedding 配置下生成的索引快照。"
+                    : "先选中一个文档级 chunk 集合，再为它构建索引。"}
+                </p>
+              </div>
+
+              <div className="form-row">
+                <div className="form-field">
+                  <label htmlFor="embeddingModel">Embedding model</label>
+                  <input
+                    id="embeddingModel"
+                    value={indexBuildRequest.embeddingModel ?? ""}
+                    maxLength={80}
+                    onChange={(event) =>
+                      setIndexBuildRequest((current) => ({
+                        ...current,
+                        embeddingModel: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="vectorDimensions">Vector dimensions</label>
+                  <input
+                    id="vectorDimensions"
+                    type="number"
+                    min={4}
+                    max={64}
+                    step={2}
+                    value={indexBuildRequest.vectorDimensions ?? 12}
+                    onChange={(event) =>
+                      setIndexBuildRequest((current) => ({
+                        ...current,
+                        vectorDimensions: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="lab-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!selectedChunkSetId || indexBuildActionStatus === "loading"}
+                  onClick={() => void handleCreateIndexBuild()}
+                >
+                  {indexBuildActionStatus === "loading" ? "构建中..." : "为当前集合构建索引"}
+                </button>
+                <p className="helper-text">当前实现使用本地 `demo-hash` 向量化骨架，先把索引状态和数据结构稳定下来。</p>
+              </div>
+
+              {indexBuildCatalogError ? <p className="error-text">{indexBuildCatalogError}</p> : null}
+              {indexBuildActionMessage ? (
+                <p className={indexBuildActionStatus === "error" ? "error-text" : "helper-text"}>{indexBuildActionMessage}</p>
+              ) : null}
+
+              {indexBuildCatalog.builds.length === 0 ? (
+                <p className="helper-text">当前 chunk 集合还没有索引构建记录。</p>
+              ) : (
+                <div className="document-list">
+                  {indexBuildCatalog.builds.map((build) => (
+                    <article
+                      key={build.id}
+                      className={`document-card ${selectedIndexBuildId === build.id ? "document-card--active" : ""}`}
+                    >
+                      <button type="button" className="document-card__content" onClick={() => void handleIndexBuildSelect(build.id)}>
+                        <div className="document-card__meta">
+                          <strong>{build.embeddingModel}</strong>
+                          <span>{build.status}</span>
+                        </div>
+                        <p>
+                          {build.totalVectors} vectors / {build.vectorDimensions} dims / vocab {build.vocabularySize}
+                        </p>
+                        <div className="document-card__footer">
+                          <span>{build.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                          <span>{build.id}</span>
+                        </div>
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {selectedIndexBuild ? (
+                <div className="index-build-detail">
+                  <div className="stats-grid">
+                    <article className="stat-card">
+                      <span>向量数</span>
+                      <strong>{selectedIndexBuild.totalVectors}</strong>
+                    </article>
+                    <article className="stat-card">
+                      <span>向量维度</span>
+                      <strong>{selectedIndexBuild.vectorDimensions}</strong>
+                    </article>
+                    <article className="stat-card">
+                      <span>词表规模</span>
+                      <strong>{selectedIndexBuild.vocabularySize}</strong>
+                    </article>
+                  </div>
+
+                  <p className="helper-text">
+                    平均 token 数 {selectedIndexBuild.averageTokenCount}，当前状态 {selectedIndexBuild.status}，构建模型{" "}
+                    {selectedIndexBuild.embeddingModel}。
+                  </p>
+                  <p className="helper-text">高频词快照：{selectedIndexBuild.topTerms.join(" / ") || "暂无"}</p>
+
+                  <div className="vector-preview-list">
+                    {selectedIndexBuild.chunkVectors.slice(0, 3).map((vector) => (
+                      <article key={vector.chunkId} className="chunk-card">
+                        <div className="chunk-card__meta">
+                          <strong>{vector.chunkId}</strong>
+                          <span>
+                            offset {vector.startOffset}-{vector.endOffset}
+                          </span>
+                          <span>{vector.tokenCount} tokens</span>
+                        </div>
+                        <pre>{vector.values.slice(0, 6).map((value) => value.toFixed(3)).join(", ")}</pre>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <form className="lab-panel" onSubmit={handleSubmit}>

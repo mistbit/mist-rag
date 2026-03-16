@@ -7,14 +7,17 @@
 - `GET /api/v1/documents`
 - `GET /api/v1/documents/{document_id}`
 - `GET /api/v1/documents/{document_id}/chunk-sets`
+- `GET /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `POST /api/v1/documents`
 - `POST /api/v1/documents/{document_id}/chunk-sets`
+- `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
 - `POST /api/v1/chunk-runs`
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
+- `GET /api/v1/index-builds/{build_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
 - `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
@@ -33,4 +36,9 @@
 - `GET /api/v1/chunk-sets/{chunk_set_id}` 会返回某个文档级 chunk 集合的完整参数和 chunk 结果
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}` 会删除指定的文档级 chunk 集合，不影响原文档
 - `PATCH /api/v1/chunk-sets/{chunk_set_id}` 可以更新该集合的 `label` 和 `notes`
+- `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds` 会基于该集合生成一份索引构建记录
+- `GET /api/v1/chunk-sets/{chunk_set_id}/index-builds` 会列出某个集合下的索引构建历史
+- `GET /api/v1/index-builds/{build_id}` 会返回具体的向量维度、词表规模、高频词和 chunk 向量快照
+- 删除文档级 chunk 集合时，会级联清理它名下的索引构建记录
+- 当前索引构建使用本地 `demo-hash-v1` 向量化骨架，先稳定接口和状态流
 - 已开启对 `http://127.0.0.1:5173` 和 `http://localhost:5173` 的本地 CORS 支持
