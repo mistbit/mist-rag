@@ -462,7 +462,8 @@ dd {
 .compare-result-card,
 .compare-rank-board,
 .compare-rank-row,
-.compare-rank-card {
+.compare-rank-card,
+.compare-report-board {
   border: 1px solid var(--line);
   border-radius: 24px;
   background: rgba(255, 251, 245, 0.84);
@@ -540,6 +541,23 @@ dd {
 
 .compare-conclusion-card--caution {
   background: linear-gradient(180deg, rgba(255, 239, 234, 0.96), rgba(249, 220, 214, 0.84));
+}
+
+.compare-report-board {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 239, 0.96), rgba(247, 236, 223, 0.88)),
+    rgba(255, 251, 245, 0.92);
+}
+
+.compare-report-board__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  flex-wrap: wrap;
 }
 
 .compare-rank-board {

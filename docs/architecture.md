@@ -22,6 +22,7 @@
 - 将 Web 前端拆成 `/learn` 与 `/lab` 两个路由，分离讲解区和实验区
 - 增加 A/B 对照实验面板，让两次 preview / retrieval 状态可以并排比较、按 rank 对齐，并高亮差异词
 - 增加自动实验结论卡片，把 A/B 快照直接总结成可读的 chunk / retrieval 观察结论
+- 增加 comparison report snapshots，把一次 A/B 对照实验持久化成可回放报告
 
 这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的摄取闭环和阶段 2 的索引骨架接起来。
 
@@ -59,7 +60,7 @@ mist-rag/
 
 ### `services/api`
 
-FastAPI 服务当前承担十四类能力：
+FastAPI 服务当前承担十五类能力：
 
 - 输出健康状态，便于前端或后续容器探活
 - 读取共享 JSON，暴露统一的 `overview` 数据
@@ -76,6 +77,7 @@ FastAPI 服务当前承担十四类能力：
 - 读取单条索引构建详情
 - 基于某个 index build 执行 query 向量化与 top-k 检索
 - 保存、列出、读取和删除 retrieval trace
+- 保存、列出、读取和删除 comparison report snapshot
 
 其中切块逻辑仍然保持“轻实现”：
 
@@ -91,6 +93,7 @@ FastAPI 服务当前承担十四类能力：
 - 文档级 chunk 集合写入 `services/api/storage/document_chunk_sets.json`
 - 索引构建记录写入 `services/api/storage/index_builds.json`
 - 检索轨迹写入 `services/api/storage/retrieval_traces.json`
+- 对照实验报告写入 `services/api/storage/comparison_reports.json`
 - 暂时不引入 SQLite
 
 删除策略当前保持简单：
@@ -119,6 +122,7 @@ Web 端当前承担两层职责：
 - 提供实验预设，直接填入一组适合教学的 chunk 参数和检索参数
 - 提供 A/B 对照实验面板，允许把当前 preview / retrieval 状态固定到两个槽位后直接比较差异，并高亮 query 命中词、槽位独有词和 rank 变化
 - 提供自动实验结论卡片，把当前 A/B 对照自动翻译成更细 / 更宽 / 更稳等可读结论
+- 提供 comparison report snapshot 列表，把一组 A/B 对照和结论保存、回放、删除
 - 提供文档实验区，让用户直接观察 chunkSize / chunkOverlap 的变化
 - 提供样例文档和已保存文档列表，让 preview 不再是一次性操作
 - 提供 chunk 历史列表，让同一次实验可以被回放
@@ -149,7 +153,7 @@ Guided lab 的推进状态目前完全由前端本地状态推导：
 
 这样做的目的是把“当前该学什么”和“当前系统里已经有什么资产”直接暴露在界面上，而不是让用户在同一页里自己寻找上下文。
 
-本轮新增的 A/B 对照实验面板同样保持前端本地实现：
+本轮新增的 A/B 对照实验区采用“前端分析 + 后端快照持久化”：
 
 - 可把当前 preview 状态固定到 `A` 或 `B`
 - 如果当前已经跑过检索，也会把 query、threshold、结果数和前三条命中一起固定下来
@@ -157,6 +161,7 @@ Guided lab 的推进状态目前完全由前端本地状态推导：
 - 对照卡会基于高排名结果提取差异词，高亮 query 命中与当前槽位独有的词，帮助用户读出“为什么结果变了”
 - Rank compare 视图会把两侧高排名结果按名次对齐，直接显示当前 rank 是延续同一 chunk 还是已经发生换位
 - 实验结论卡片会把这些原始差异再整理成简短结论和下一步测试建议，降低第一次读实验结果的门槛
+- comparison report snapshot 会把当时的 A/B 快照和结论一起存进 API 存储，方便后续直接回放这次实验
 
 本轮还补了一层“草稿状态和资产状态分离”的处理：
 
@@ -188,9 +193,12 @@ packages/shared/rag-overview.json
 
 apps/web/src/App.tsx
   ├─> GET /api/v1/documents
+  ├─> GET /api/v1/comparison-reports
+  ├─> GET /api/v1/comparison-reports/{id}
   ├─> GET /api/v1/documents/{id}
   ├─> GET /api/v1/documents/{id}/chunk-sets
   ├─> GET /api/v1/chunk-sets/{id}/index-builds
+  ├─> POST /api/v1/comparison-reports
   ├─> POST /api/v1/documents
   ├─> POST /api/v1/documents/{id}/chunk-sets
   ├─> POST /api/v1/chunk-sets/{id}/index-builds
@@ -205,6 +213,7 @@ apps/web/src/App.tsx
   ├─> GET /api/v1/chunk-sets/{id}
   ├─> GET /api/v1/index-builds/{id}
   ├─> GET /api/v1/retrieval-traces/{id}
+  ├─> DELETE /api/v1/comparison-reports/{id}
   ├─> DELETE /api/v1/chunk-sets/{id}
   ├─> DELETE /api/v1/retrieval-traces/{id}
   ├─> PATCH /api/v1/chunk-sets/{id}
@@ -222,6 +231,8 @@ apps/web/src/App.tsx
         │     └─> 返回 top-k 检索结果
         ├─> services/api/app/retrieval_traces.py
         │     └─> services/api/storage/retrieval_traces.json
+        ├─> services/api/app/comparison_reports.py
+        │     └─> services/api/storage/comparison_reports.json
         └─> services/api/app/chunking.py
               └─> 返回 ChunkPreviewResponse
 ```
