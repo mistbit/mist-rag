@@ -66,12 +66,25 @@ const EMPTY_SEARCH_RESULT: SearchIndexBuildResponse | null = null;
 const EMPTY_RETRIEVAL_TRACE_CATALOG: RetrievalTraceCatalogResponse = {
   traces: [],
 };
+const ROUTE_PATHS = {
+  learn: "/learn",
+  lab: "/lab",
+} as const;
 
 type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
+type AppRoute = "learn" | "lab";
 type GuideStepId = "document" | "preview" | "results" | "index" | "search" | "trace";
 type LabPresetId = "balanced" | "fine-grained" | "strict-filter";
+
+function getRouteFromPathname(pathname: string): AppRoute {
+  if (pathname === ROUTE_PATHS.lab) {
+    return "lab";
+  }
+
+  return "learn";
+}
 
 type GuideStep = {
   id: GuideStepId;
@@ -183,6 +196,29 @@ export default function App() {
   const [retrievalTraceMessage, setRetrievalTraceMessage] = useState("");
   const [activeGuideStepId, setActiveGuideStepId] = useState<GuideStepId>("document");
   const [selectedPresetId, setSelectedPresetId] = useState<LabPresetId | null>("balanced");
+  const [activeRoute, setActiveRoute] = useState<AppRoute>(() => getRouteFromPathname(globalThis.location?.pathname ?? "/learn"));
+  const [pendingScrollTargetId, setPendingScrollTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextRoute = getRouteFromPathname(globalThis.location?.pathname ?? "/learn");
+    const nextPath = ROUTE_PATHS[nextRoute];
+
+    if (globalThis.location?.pathname !== nextPath) {
+      globalThis.history?.replaceState({}, "", nextPath);
+    }
+
+    setActiveRoute(nextRoute);
+
+    const handlePopState = () => {
+      setActiveRoute(getRouteFromPathname(globalThis.location?.pathname ?? "/learn"));
+    };
+
+    globalThis.addEventListener?.("popstate", handlePopState);
+
+    return () => {
+      globalThis.removeEventListener?.("popstate", handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1178,6 +1214,41 @@ export default function App() {
     hasTrace,
   ]);
 
+  useEffect(() => {
+    if (!pendingScrollTargetId) {
+      return;
+    }
+
+    const frame = globalThis.requestAnimationFrame?.(() => {
+      globalThis.document?.getElementById(pendingScrollTargetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setPendingScrollTargetId(null);
+    });
+
+    return () => {
+      if (frame) {
+        globalThis.cancelAnimationFrame?.(frame);
+      }
+    };
+  }, [activeRoute, pendingScrollTargetId]);
+
+  function navigateToRoute(route: AppRoute, targetId?: string) {
+    const nextPath = ROUTE_PATHS[route];
+
+    if (globalThis.location?.pathname !== nextPath) {
+      globalThis.history?.pushState({}, "", nextPath);
+      setActiveRoute(route);
+    } else {
+      setActiveRoute(route);
+    }
+
+    if (targetId) {
+      setPendingScrollTargetId(targetId);
+    }
+  }
+
   function getGuideStepState(step: GuideStep) {
     if (step.done) {
       return "done";
@@ -1198,10 +1269,7 @@ export default function App() {
       return;
     }
 
-    globalThis.document?.getElementById(step.targetId)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    navigateToRoute("lab", step.targetId);
   }
 
   async function applyLabPreset(presetId: LabPresetId) {
@@ -1269,8 +1337,37 @@ export default function App() {
 
   return (
     <main className="page-shell">
-      <section className="hero">
-        <div className="hero__copy">
+      <section className="route-shell">
+        <div className="route-shell__copy">
+          <p className="eyebrow">Experience</p>
+          <h2>{activeRoute === "learn" ? "先理解，再实验" : "直接进入实验台"}</h2>
+          <p>
+            {activeRoute === "learn"
+              ? "学习页负责解释 RAG 流程、术语和交付边界。实验页负责按步骤跑完整的 chunk / index / retrieval 闭环。"
+              : "实验页只保留真正需要操作和观察的内容，适合连续调整参数、保存资产和回放 trace。"}
+          </p>
+        </div>
+
+        <div className="route-switch">
+          <button
+            type="button"
+            className={`route-switch__button ${activeRoute === "learn" ? "route-switch__button--active" : ""}`}
+            onClick={() => navigateToRoute("learn")}
+          >
+            <span>Learn</span>
+            <strong>原理与结构</strong>
+          </button>
+          <button
+            type="button"
+            className={`route-switch__button ${activeRoute === "lab" ? "route-switch__button--active" : ""}`}
+            onClick={() => navigateToRoute("lab")}
+          >
+            <span>Lab</span>
+            <strong>引导式实验</strong>
+          </button>
+        </div>
+
+        <div className="route-shell__meta">
           <span className={`status-pill status-pill--${overviewStatus}`}>
             {overviewStatus === "online"
               ? "API online"
@@ -1278,49 +1375,108 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 6 / Retrieval traces</p>
-          <h1>{overview.hero.title}</h1>
-          <p className="hero__subtitle">{overview.hero.subtitle}</p>
-        </div>
-
-        <div className="hero__panel">
-          <h2>当前交付边界</h2>
-          <ul>
-            <li>保留学习首页、文档库、preview 与 chunk 历史</li>
-            <li>文档级 chunk 集合继续作为稳定输入层</li>
-            <li>索引记录继续承担 embedding/index 的实验骨架</li>
-            <li>新增 top-k 检索实验，直接观察 query 与 chunk 的相似度排序</li>
-            <li>新增 retrieval trace history，保存 query、threshold 和结果回放</li>
-            <li>同一页里可以在文档、chunk 集合、索引记录、检索结果和历史之间切换</li>
-          </ul>
+          <p>{completedGuideSteps}/{guideSteps.length} steps completed</p>
         </div>
       </section>
 
-      <section className="section">
-        <div className="section__heading">
-          <p className="eyebrow">RAG pipeline</p>
-          <h2>从文档到答案的 6 个可观察节点</h2>
-        </div>
-        <div className="flow-grid">
-          {overview.flow.map((node, index) => (
-            <article key={node.id} className="flow-card">
-              <div className="flow-card__header">
-                <span className="flow-card__index">{String(index + 1).padStart(2, "0")}</span>
-                <h3>{node.title}</h3>
+      {activeRoute === "learn" ? (
+        <>
+          <section className="hero">
+            <div className="hero__copy">
+              <div>
+                <p className="eyebrow">Sprint 6 / Retrieval traces</p>
+                <h1>{overview.hero.title}</h1>
+                <p className="hero__subtitle">{overview.hero.subtitle}</p>
               </div>
-              <p>{node.summary}</p>
-              <dl>
-                <div>
-                  <dt>学习重点</dt>
-                  <dd>{node.learningFocus}</dd>
-                </div>
-                <div>
-                  <dt>阶段输出</dt>
-                  <dd>{node.output}</dd>
-                </div>
-              </dl>
+
+              <div className="hero__actions">
+                <button type="button" className="primary-button" onClick={() => focusGuideStep(recommendedGuideStep.id)}>
+                  进入实验台
+                </button>
+                <button type="button" className="secondary-button" onClick={() => navigateToRoute("lab")}>
+                  只看 Guided Lab
+                </button>
+              </div>
+            </div>
+
+            <div className="hero__panel">
+              <h2>当前交付边界</h2>
+              <ul>
+                <li>保留学习首页、文档库、preview 与 chunk 历史</li>
+                <li>文档级 chunk 集合继续作为稳定输入层</li>
+                <li>索引记录继续承担 embedding/index 的实验骨架</li>
+                <li>新增 top-k 检索实验，直接观察 query 与 chunk 的相似度排序</li>
+                <li>新增 retrieval trace history，保存 query、threshold 和结果回放</li>
+                <li>学习页与实验页已拆开，减少同屏信息拥挤</li>
+              </ul>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section__heading">
+              <p className="eyebrow">RAG pipeline</p>
+              <h2>从文档到答案的 6 个可观察节点</h2>
+            </div>
+            <div className="flow-grid">
+              {overview.flow.map((node, index) => (
+                <article key={node.id} className="flow-card">
+                  <div className="flow-card__header">
+                    <span className="flow-card__index">{String(index + 1).padStart(2, "0")}</span>
+                    <h3>{node.title}</h3>
+                  </div>
+                  <p>{node.summary}</p>
+                  <dl>
+                    <div>
+                      <dt>学习重点</dt>
+                      <dd>{node.learningFocus}</dd>
+                    </div>
+                    <div>
+                      <dt>阶段输出</dt>
+                      <dd>{node.output}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="section learn-bridge">
+            <article className="learn-bridge__card">
+              <p className="eyebrow">Next</p>
+              <h2>准备好以后，直接切到 `/lab` 开始跑实验</h2>
+              <p>学习页负责建立概念模型，实验页负责把概念变成可观察结果。两个路由共享同一套实验状态，不需要重新开始。</p>
+              <div className="lab-actions">
+                <button type="button" className="primary-button" onClick={() => focusGuideStep(recommendedGuideStep.id)}>
+                  跳到建议步骤
+                </button>
+                <button type="button" className="secondary-button" onClick={() => navigateToRoute("lab")}>
+                  打开实验页
+                </button>
+              </div>
             </article>
-          ))}
+          </section>
+        </>
+      ) : null}
+
+      {activeRoute === "lab" ? (
+        <>
+      <section className="route-hero route-hero--lab">
+        <div className="route-hero__copy">
+          <p className="eyebrow">Guided Lab</p>
+          <h1>把学习内容压缩成一步一步的实验</h1>
+          <p>这里专注于选择文档、生成 preview、保存 chunk 集合、建索引、跑检索和回放 trace。</p>
+        </div>
+        <div className="route-hero__panel">
+          <div className="route-hero__metric">
+            <span>Recommended</span>
+            <strong>Step {recommendedGuideStep.step}</strong>
+            <p>{recommendedGuideStep.title}</p>
+          </div>
+          <div className="route-hero__metric">
+            <span>Current preset</span>
+            <strong>{selectedPreset?.label ?? "自定义参数"}</strong>
+            <p>{selectedPreset?.expected ?? "你正在使用自定义实验参数。"}</p>
+          </div>
         </div>
       </section>
 
@@ -2160,7 +2316,10 @@ export default function App() {
           </section>
         </div>
       </section>
+        </>
+      ) : null}
 
+      {activeRoute === "learn" ? (
       <section className="section section--split">
         <div>
           <div className="section__heading">
@@ -2197,6 +2356,7 @@ export default function App() {
           </div>
         </div>
       </section>
+      ) : null}
     </main>
   );
 }
