@@ -65,6 +65,25 @@ def get_document_chunk_set(chunk_set_id: str) -> DocumentChunkSetRecord | None:
     return None
 
 
+def delete_document_chunk_set(chunk_set_id: str) -> bool:
+    records = _load_document_chunk_sets()
+    remaining = [record for record in records if record.id != chunk_set_id]
+    if len(remaining) == len(records):
+        return False
+
+    _write_document_chunk_sets(remaining)
+    return True
+
+
+def delete_document_chunk_sets_for_document(document_id: str) -> int:
+    records = _load_document_chunk_sets()
+    remaining = [record for record in records if record.document_id != document_id]
+    deleted_count = len(records) - len(remaining)
+    if deleted_count > 0:
+        _write_document_chunk_sets(remaining)
+    return deleted_count
+
+
 def save_document_chunk_set(document_id: str, payload: SaveDocumentChunkSetRequest) -> DocumentChunkSetRecord | None:
     document = get_document(document_id)
     if document is None:

@@ -6,7 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from .chunking import generate_chunk_preview
 from .chunk_runs import delete_chunk_run, get_chunk_run, list_chunk_runs, save_chunk_run
 from .content import load_overview
-from .document_chunks import get_document_chunk_set, list_document_chunk_sets, save_document_chunk_set
+from .document_chunks import (
+    delete_document_chunk_set,
+    delete_document_chunk_sets_for_document,
+    get_document_chunk_set,
+    list_document_chunk_sets,
+    save_document_chunk_set,
+)
 from .documents import delete_document, get_document, list_documents, save_document
 from .schemas import (
     ChunkRunCatalogResponse,
@@ -86,6 +92,7 @@ def remove_document(document_id: str) -> dict[str, str]:
     deleted = delete_document(document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")
+    delete_document_chunk_sets_for_document(document_id)
     return {"status": "deleted", "id": document_id}
 
 
@@ -116,6 +123,14 @@ def get_document_chunk_set_by_id(chunk_set_id: str) -> DocumentChunkSetRecord:
     if record is None:
         raise HTTPException(status_code=404, detail="Document chunk set not found.")
     return record
+
+
+@app.delete("/api/v1/chunk-sets/{chunk_set_id}")
+def remove_document_chunk_set(chunk_set_id: str) -> dict[str, str]:
+    deleted = delete_document_chunk_set(chunk_set_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    return {"status": "deleted", "id": chunk_set_id}
 
 
 @app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)

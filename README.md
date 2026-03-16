@@ -1,6 +1,6 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合”的 ingest 闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理”的 ingest 闭环。
 
 ## 当前内容
 
@@ -19,7 +19,7 @@
 - API 支持 `chunkSize` / `chunkOverlap` 参数的切块预览
 - 当前 preview 结果可保存成 chunk 历史记录，并可重新载入当时的参数和结果
 - 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
-- 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定
+- 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -92,6 +92,7 @@ uvicorn app.main:app --reload --port 8000
 - `POST /api/v1/chunk-runs`
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
+- `DELETE /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
 
 `GET /api/v1/documents` 会返回两个列表：
@@ -117,6 +118,11 @@ uvicorn app.main:app --reload --port 8000
 
 - `chunk-runs` 记录一次实验轨迹，可以不绑定文档
 - `chunk-sets` 必须绑定某个文档，适合保存相对稳定的切块结果
+
+删除规则：
+
+- 删除 `saved` 文档时，会级联清理这个文档下的 chunk 集合
+- 删除 chunk 集合时，不会删除文档本身
 
 `POST /api/v1/documents` 请求示例：
 
@@ -158,9 +164,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成文档级 chunk 集合之后，下一步建议继续推进文档摄取：
+完成文档级 chunk 集合管理之后，下一步建议继续推进文档摄取：
 
-1. 为文档级 chunk 集合增加删除和命名能力
+1. 为文档级 chunk 集合增加命名和更新时间展示
 2. 把 `Chunk` 持久化和文档保存真正关联起来
 3. 引入真正的 dataset 管理与状态页
 4. 再进入 embedding 和索引构建

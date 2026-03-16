@@ -342,6 +342,41 @@ export default function App() {
     }
   }
 
+  async function handleDeleteDocumentChunkSet(chunkSetId: string, title: string) {
+    if (!window.confirm(`删除文档级 chunk 集合 "${title}"？此操作不会删除文档本身。`)) {
+      return;
+    }
+
+    setChunkSetSaveStatus("loading");
+    setChunkSetSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-sets/${chunkSetId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      if (selectedChunkSetId === chunkSetId) {
+        setSelectedChunkSetId(null);
+      }
+
+      setChunkSetSaveStatus("saved");
+      setChunkSetSaveMessage(`已删除文档级 chunk 集合 ${title}`);
+      if (selectedDocumentId) {
+        await loadDocumentChunkSets(selectedDocumentId);
+      } else {
+        clearDocumentChunkSets();
+      }
+    } catch (error) {
+      setChunkSetSaveStatus("error");
+      setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to delete document chunk set.");
+    }
+  }
+
   async function handleSaveDocument() {
     setDocumentSaveStatus("loading");
     setDocumentSaveMessage("");
@@ -694,6 +729,15 @@ export default function App() {
                           <span>{record.id}</span>
                         </div>
                       </button>
+                      <div className="document-card__actions">
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => void handleDeleteDocumentChunkSet(record.id, record.documentTitle)}
+                        >
+                          删除
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
