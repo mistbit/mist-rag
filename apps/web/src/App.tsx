@@ -295,6 +295,37 @@ export default function App() {
     }
   }
 
+  async function handleDeleteDocument(documentId: string, title: string) {
+    if (!window.confirm(`删除文档 "${title}"？此操作不会删除样例数据，但会移除本地保存记录。`)) {
+      return;
+    }
+
+    setDocumentSaveStatus("loading");
+    setDocumentSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      if (selectedDocumentId === documentId) {
+        setSelectedDocumentId(null);
+      }
+
+      setDocumentSaveStatus("saved");
+      setDocumentSaveMessage(`已删除文档 ${title}`);
+      await loadDocumentCatalog();
+    } catch (error) {
+      setDocumentSaveStatus("error");
+      setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to delete document.");
+    }
+  }
+
   async function handleSaveChunkRun() {
     if (!previewResult) {
       return;
@@ -332,6 +363,37 @@ export default function App() {
     }
   }
 
+  async function handleDeleteRun(runId: string, title: string) {
+    if (!window.confirm(`删除切块记录 "${title}"？此操作只会移除历史记录，不会删除文档。`)) {
+      return;
+    }
+
+    setRunSaveStatus("loading");
+    setRunSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-runs/${runId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      if (selectedRunId === runId) {
+        setSelectedRunId(null);
+      }
+
+      setRunSaveStatus("saved");
+      setRunSaveMessage(`已删除切块记录 ${title}`);
+      await loadRunCatalog();
+    } catch (error) {
+      setRunSaveStatus("error");
+      setRunSaveMessage(error instanceof Error ? error.message : "Unable to delete chunk run.");
+    }
+  }
+
   function renderDocumentSection(title: string, items: DocumentCatalogResponse["samples"]) {
     return (
       <section className="document-section">
@@ -344,22 +406,30 @@ export default function App() {
         ) : (
           <div className="document-list">
             {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`document-card ${selectedDocumentId === item.id ? "document-card--active" : ""}`}
-                onClick={() => void handleDocumentSelect(item.id)}
-              >
-                <div className="document-card__meta">
-                  <strong>{item.title}</strong>
-                  <span>{item.origin === "sample" ? "Sample" : "Saved"}</span>
-                </div>
-                <p>{item.excerpt}</p>
-                <div className="document-card__footer">
-                  <span>{item.sourceType.toUpperCase()}</span>
-                  <span>{item.charCount} chars</span>
-                </div>
-              </button>
+              <article key={item.id} className={`document-card ${selectedDocumentId === item.id ? "document-card--active" : ""}`}>
+                <button type="button" className="document-card__content" onClick={() => void handleDocumentSelect(item.id)}>
+                  <div className="document-card__meta">
+                    <strong>{item.title}</strong>
+                    <span>{item.origin === "sample" ? "Sample" : "Saved"}</span>
+                  </div>
+                  <p>{item.excerpt}</p>
+                  <div className="document-card__footer">
+                    <span>{item.sourceType.toUpperCase()}</span>
+                    <span>{item.charCount} chars</span>
+                  </div>
+                </button>
+                {item.origin === "saved" ? (
+                  <div className="document-card__actions">
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => void handleDeleteDocument(item.id, item.title)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ) : null}
+              </article>
             ))}
           </div>
         )}
@@ -477,24 +547,30 @@ export default function App() {
               ) : (
                 <div className="document-list">
                   {runCatalog.runs.map((run) => (
-                    <button
-                      key={run.id}
-                      type="button"
-                      className={`document-card ${selectedRunId === run.id ? "document-card--active" : ""}`}
-                      onClick={() => void handleRunSelect(run.id)}
-                    >
-                      <div className="document-card__meta">
-                        <strong>{run.title}</strong>
-                        <span>{run.totalChunks} chunks</span>
+                    <article key={run.id} className={`document-card ${selectedRunId === run.id ? "document-card--active" : ""}`}>
+                      <button type="button" className="document-card__content" onClick={() => void handleRunSelect(run.id)}>
+                        <div className="document-card__meta">
+                          <strong>{run.title}</strong>
+                          <span>{run.totalChunks} chunks</span>
+                        </div>
+                        <p>
+                          chunkSize {run.chunkSize} / overlap {run.chunkOverlap}
+                        </p>
+                        <div className="document-card__footer">
+                          <span>{run.charCount} chars</span>
+                          <span>{run.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                        </div>
+                      </button>
+                      <div className="document-card__actions">
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => void handleDeleteRun(run.id, run.title)}
+                        >
+                          删除
+                        </button>
                       </div>
-                      <p>
-                        chunkSize {run.chunkSize} / overlap {run.chunkOverlap}
-                      </p>
-                      <div className="document-card__footer">
-                        <span>{run.charCount} chars</span>
-                        <span>{run.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
-                      </div>
-                    </button>
+                    </article>
                   ))}
                 </div>
               )}

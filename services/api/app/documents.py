@@ -134,3 +134,13 @@ def save_document(payload: SaveDocumentRequest) -> DocumentRecord:
     documents.append(document)
     _write_saved_documents(documents)
     return document
+
+
+def delete_document(document_id: str) -> bool:
+    documents = _load_saved_documents()
+    remaining = [document for document in documents if document.id != document_id]
+    if len(remaining) == len(documents):
+        return False
+
+    _write_saved_documents(remaining)
+    return True

@@ -72,3 +72,13 @@ def save_chunk_run(payload: SaveChunkRunRequest) -> ChunkRunRecord:
     runs.append(record)
     _write_chunk_runs(runs)
     return record
+
+
+def delete_chunk_run(run_id: str) -> bool:
+    runs = _load_chunk_runs()
+    remaining = [run for run in runs if run.id != run_id]
+    if len(remaining) == len(runs):
+        return False
+
+    _write_chunk_runs(remaining)
+    return True

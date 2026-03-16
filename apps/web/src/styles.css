@@ -388,15 +388,28 @@ dd {
   width: 100%;
   border: 1px solid rgba(31, 31, 25, 0.1);
   border-radius: 18px;
-  padding: 16px;
-  text-align: left;
   background: rgba(255, 251, 245, 0.85);
-  cursor: pointer;
+  overflow: hidden;
 }
 
 .document-card--active {
   border-color: rgba(189, 83, 40, 0.5);
   box-shadow: inset 0 0 0 1px rgba(189, 83, 40, 0.18);
+}
+
+.document-card__content {
+  width: 100%;
+  border: 0;
+  padding: 16px 16px 10px;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.document-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 16px;
 }
 
 .document-card__meta,
@@ -416,6 +429,15 @@ dd {
 .document-card p {
   margin: 10px 0;
   line-height: 1.5;
+}
+
+.danger-button {
+  border: 1px solid rgba(156, 47, 24, 0.16);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #9c2f18;
+  background: rgba(156, 47, 24, 0.08);
+  cursor: pointer;
 }
 
 .chunk-card {

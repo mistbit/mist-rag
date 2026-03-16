@@ -1,6 +1,6 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看”的 ingest 闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理”的 ingest 闭环。
 
 ## 当前内容
 
@@ -18,6 +18,7 @@
 - 当前编辑内容可保存到本地持久化存储，重启 API 后仍可重新载入
 - API 支持 `chunkSize` / `chunkOverlap` 参数的切块预览
 - 当前 preview 结果可保存成 chunk 历史记录，并可重新载入当时的参数和结果
+- 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -82,15 +83,22 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/documents`
 - `GET /api/v1/documents/{document_id}`
 - `POST /api/v1/documents`
+- `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
 - `POST /api/v1/chunk-runs`
+- `DELETE /api/v1/chunk-runs/{run_id}`
 - `POST /api/v1/chunk-preview`
 
 `GET /api/v1/documents` 会返回两个列表：
 
 - `samples`: 来自 `datasets/demo-corpus`
 - `saved`: 来自本地持久化存储 `services/api/storage/documents.json`
+
+注意：
+
+- `DELETE /api/v1/documents/{document_id}` 只允许删除 `saved` 文档
+- `sample-*` 样例文档会返回错误，不能删除
 
 `POST /api/v1/documents` 请求示例：
 
@@ -132,9 +140,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成 chunk 历史回看之后，下一步建议继续推进文档摄取：
+完成删除管理之后，下一步建议继续推进文档摄取：
 
-1. 为已保存文档和 chunk 历史增加删除能力
-2. 把 `Chunk` 持久化和文档保存真正关联起来
+1. 把 `Chunk` 持久化和文档保存真正关联起来
+2. 为文档和 chunk 历史增加重命名与更新时间展示
 3. 引入真正的 dataset 管理与状态页
 4. 再进入 embedding 和索引构建

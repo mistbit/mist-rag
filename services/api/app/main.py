@@ -4,9 +4,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .chunking import generate_chunk_preview
-from .chunk_runs import get_chunk_run, list_chunk_runs, save_chunk_run
+from .chunk_runs import delete_chunk_run, get_chunk_run, list_chunk_runs, save_chunk_run
 from .content import load_overview
-from .documents import get_document, list_documents, save_document
+from .documents import delete_document, get_document, list_documents, save_document
 from .schemas import (
     ChunkRunCatalogResponse,
     ChunkRunRecord,
@@ -66,6 +66,17 @@ def create_document(payload: SaveDocumentRequest) -> DocumentRecord:
     return save_document(payload)
 
 
+@app.delete("/api/v1/documents/{document_id}")
+def remove_document(document_id: str) -> dict[str, str]:
+    if document_id.startswith("sample-"):
+        raise HTTPException(status_code=400, detail="Sample documents cannot be deleted.")
+
+    deleted = delete_document(document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return {"status": "deleted", "id": document_id}
+
+
 @app.get("/api/v1/chunk-runs", response_model=ChunkRunCatalogResponse)
 def get_chunk_runs() -> ChunkRunCatalogResponse:
     return list_chunk_runs()
@@ -82,6 +93,14 @@ def get_chunk_run_by_id(run_id: str) -> ChunkRunRecord:
 @app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)
 def create_chunk_run(payload: SaveChunkRunRequest) -> ChunkRunRecord:
     return save_chunk_run(payload)
+
+
+@app.delete("/api/v1/chunk-runs/{run_id}")
+def remove_chunk_run(run_id: str) -> dict[str, str]:
+    deleted = delete_chunk_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Chunk run not found.")
+    return {"status": "deleted", "id": run_id}
 
 
 @app.post("/api/v1/chunk-preview", response_model=ChunkPreviewResponse)
