@@ -1,13 +1,21 @@
 # Mist RAG
 
-`mist-rag` 当前落地的是 Sprint 1：先把“RAG 学习平台”的产品骨架、API 骨架和共享数据契约搭起来，而不是直接跳进完整检索或生成实现。
+`mist-rag` 当前已经完成 Sprint 1，并进入阶段 1 的第一步：在学习首页之外，增加最小可用的“文档输入 + 切块预览”实验闭环。
 
 ## 当前内容
 
 - `apps/web`: React + Vite 学习首页，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
-- `services/api`: FastAPI 最小服务，提供健康检查和 RAG 总览数据接口
-- `packages/shared`: 前后端共享的基础类型定义与单一数据源 `rag-overview.json`
+- `services/api`: FastAPI 服务，提供健康检查、RAG 总览和切块预览接口
+- `packages/shared`: 前后端共享的基础类型定义与学习首页单一数据源 `rag-overview.json`
 - `docs`: 产品规划与架构说明
+
+## 当前能力
+
+- 学习首页可展示 RAG 全链路、术语卡片和 Sprint 1 交付边界
+- 文档实验区支持直接粘贴 Markdown / TXT，或导入本地 `.md` / `.txt` 文件
+- API 支持 `chunkSize` / `chunkOverlap` 参数的切块预览
+- 前端可展示 chunk 数量、平均长度、offset 和 token 估算
+- 前后端本地开发已打通跨域访问
 
 ## 本地运行
 
@@ -67,11 +75,25 @@ uvicorn app.main:app --reload --port 8000
 
 - `GET /healthz`
 - `GET /api/v1/overview`
+- `POST /api/v1/chunk-preview`
+
+`POST /api/v1/chunk-preview` 请求示例：
+
+```json
+{
+  "title": "rag-learning-note.md",
+  "sourceType": "md",
+  "content": "# RAG\n\nChunking matters.",
+  "chunkSize": 280,
+  "chunkOverlap": 60
+}
+```
 
 ## 下一步
 
-Sprint 1 完成后，下一阶段建议进入文档摄取与切块：
+完成切块预览后，下一步建议继续推进文档摄取：
 
-1. 增加上传入口与样例数据集
+1. 增加样例数据集和文档列表
 2. 落地 `Document` / `Chunk` 持久化
-3. 提供 chunk 预览 API 和对应可视化界面
+3. 支持上传后重复查看历史切块结果
+4. 再进入 embedding 和索引构建

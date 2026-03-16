@@ -30,10 +30,12 @@ export type RagOverview = {
 export type DocumentRecord = {
   id: string;
   title: string;
-  sourceType: "txt" | "md" | "pdf";
+  sourceType: DocumentSourceType;
   content: string;
   metadata: Record<string, string>;
 };
+
+export type DocumentSourceType = "txt" | "md" | "pdf";
 
 export type ChunkRecord = {
   id: string;
@@ -69,3 +71,30 @@ export type RagRun = {
   createdAt: string;
 };
 
+export type ChunkPreviewRequest = {
+  title: string;
+  sourceType: Extract<DocumentSourceType, "txt" | "md">;
+  content: string;
+  chunkSize: number;
+  chunkOverlap: number;
+};
+
+export type ChunkPreviewDocument = {
+  id: string;
+  title: string;
+  sourceType: Extract<DocumentSourceType, "txt" | "md">;
+  charCount: number;
+};
+
+export type ChunkPreviewStats = {
+  totalChunks: number;
+  averageChunkLength: number;
+  requestedChunkSize: number;
+  requestedChunkOverlap: number;
+};
+
+export type ChunkPreviewResponse = {
+  document: ChunkPreviewDocument;
+  stats: ChunkPreviewStats;
+  chunks: ChunkRecord[];
+};
