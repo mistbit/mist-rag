@@ -1,0 +1,12 @@
+{
+  "name": "mist-rag",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.2.1",
+  "scripts": {
+    "dev:web": "pnpm --filter @mist-rag/web dev",
+    "build:web": "pnpm --filter @mist-rag/web build",
+    "check:web": "pnpm --filter @mist-rag/web typecheck"
+  }
+}
+

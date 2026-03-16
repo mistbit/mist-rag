@@ -1,0 +1,102 @@
+{
+  "hero": {
+    "title": "Mist RAG Visual Learning Lab",
+    "subtitle": "把检索增强生成拆成可观察、可比较、可复盘的学习流程。"
+  },
+  "flow": [
+    {
+      "id": "ingest",
+      "title": "文档摄取",
+      "summary": "导入 Markdown、TXT 或 PDF，并保留来源元数据。",
+      "learningFocus": "理解原始数据质量为什么决定后续上限。",
+      "output": "结构化文档对象"
+    },
+    {
+      "id": "chunk",
+      "title": "文本切块",
+      "summary": "按 chunk size 和 overlap 切分文本，保留位置和 token 信息。",
+      "learningFocus": "观察切块边界如何影响召回粒度与上下文连续性。",
+      "output": "可检索 chunk 集合"
+    },
+    {
+      "id": "embed",
+      "title": "向量化",
+      "summary": "把 chunk 与 query 映射到同一语义空间。",
+      "learningFocus": "理解 embedding 并不是关键词匹配，而是语义表示。",
+      "output": "向量表示"
+    },
+    {
+      "id": "retrieve",
+      "title": "检索与重排",
+      "summary": "召回 top-k 片段，必要时追加 rerank。",
+      "learningFocus": "区分没召回到和召回到了但排序不理想。",
+      "output": "带分数的检索结果"
+    },
+    {
+      "id": "prompt",
+      "title": "Prompt 组装",
+      "summary": "把 system prompt、用户问题、上下文片段拼成最终输入。",
+      "learningFocus": "理解提示词设计如何约束答案风格与引用方式。",
+      "output": "最终模型输入"
+    },
+    {
+      "id": "answer",
+      "title": "生成与引用",
+      "summary": "让 LLM 回答并回指来源 chunk，支持可解释展示。",
+      "learningFocus": "建立 grounded generation 和 citation 的基本心智模型。",
+      "output": "答案与引用映射"
+    }
+  ],
+  "glossary": [
+    {
+      "term": "Chunk",
+      "description": "从原文中切分出的可独立索引与召回的最小语义片段。"
+    },
+    {
+      "term": "Embedding",
+      "description": "把文本映射为向量表示，使语义上接近的内容距离更近。"
+    },
+    {
+      "term": "Top-K",
+      "description": "检索阶段返回的候选片段数量上限。"
+    },
+    {
+      "term": "Rerank",
+      "description": "在初始召回之后再次排序，提升真正相关片段的优先级。"
+    },
+    {
+      "term": "Grounding",
+      "description": "让答案尽量建立在已检索到的上下文证据上，而不是模型猜测。"
+    }
+  ],
+  "sprintOne": [
+    {
+      "name": "Web shell",
+      "goal": "建立可运行的学习首页骨架，先把 RAG 全链路可视化。",
+      "deliverables": [
+        "单页学习首页",
+        "流程卡片与术语卡片",
+        "API 数据拉取与降级回退"
+      ]
+    },
+    {
+      "name": "API shell",
+      "goal": "提供最小 FastAPI 服务，为前端输出流程与健康状态。",
+      "deliverables": [
+        "健康检查接口",
+        "RAG 总览接口",
+        "共享 JSON 数据加载"
+      ]
+    },
+    {
+      "name": "Shared contracts",
+      "goal": "先稳定核心数据模型，减少后续 UI 与 engine 反复返工。",
+      "deliverables": [
+        "TypeScript 数据类型",
+        "RAG 流程基础内容",
+        "文档中的接口约束说明"
+      ]
+    }
+  ]
+}
+

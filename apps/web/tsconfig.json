@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@mist-rag/shared": ["../../packages/shared/src/index.ts"],
+      "@mist-rag/data": ["../../packages/shared/rag-overview.json"]
+    }
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,249 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap");
+
+:root {
+  color-scheme: light;
+  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  --bg: #f2efe8;
+  --panel: rgba(250, 247, 240, 0.78);
+  --panel-strong: #fff8ec;
+  --text: #1f1f19;
+  --muted: #5a5b4f;
+  --accent: #bd5328;
+  --accent-soft: #f0c3a5;
+  --line: rgba(31, 31, 25, 0.12);
+  --shadow: 0 24px 60px rgba(69, 49, 32, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(189, 83, 40, 0.16), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(44, 110, 125, 0.14), transparent 24%),
+    linear-gradient(180deg, #f8f4ed 0%, var(--bg) 100%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.page-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.35fr 0.9fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.hero__copy,
+.hero__panel,
+.flow-card,
+.glossary-card,
+.milestone-card {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+}
+
+.hero__copy {
+  padding: 36px;
+}
+
+.hero__panel {
+  padding: 28px;
+  background: linear-gradient(180deg, rgba(255, 248, 236, 0.95), rgba(255, 236, 214, 0.92));
+}
+
+.hero__panel ul,
+.milestone-card ul {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 16px;
+  font-size: clamp(2.8rem, 6vw, 5.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+h3 {
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+p,
+dd,
+li {
+  line-height: 1.6;
+}
+
+.hero__subtitle,
+.section__heading p,
+.flow-card p,
+.glossary-card p,
+.milestone-card p,
+dd,
+li {
+  color: var(--muted);
+}
+
+.status-pill {
+  display: inline-flex;
+  margin-bottom: 20px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: rgba(31, 31, 25, 0.08);
+}
+
+.status-pill--online {
+  background: rgba(44, 110, 125, 0.14);
+  color: #1f6674;
+}
+
+.status-pill--fallback {
+  background: rgba(189, 83, 40, 0.14);
+  color: #90401e;
+}
+
+.section {
+  margin-top: 28px;
+}
+
+.section--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.section__heading {
+  margin-bottom: 18px;
+}
+
+.flow-grid,
+.glossary-list,
+.milestone-list {
+  display: grid;
+  gap: 18px;
+}
+
+.flow-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.glossary-list,
+.milestone-list {
+  grid-template-columns: 1fr;
+}
+
+.flow-card,
+.glossary-card,
+.milestone-card {
+  padding: 22px;
+}
+
+.flow-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.flow-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -24px -32px auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(189, 83, 40, 0.18), transparent 70%);
+}
+
+.flow-card__header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.flow-card__index {
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
+dl {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+dt {
+  margin-bottom: 4px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+dd {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .section--split,
+  .flow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-shell {
+    width: min(100% - 20px, 1180px);
+    padding: 28px 0 48px;
+  }
+
+  .hero__copy,
+  .hero__panel,
+  .flow-card,
+  .glossary-card,
+  .milestone-card {
+    border-radius: 22px;
+  }
+}
+
