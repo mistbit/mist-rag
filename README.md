@@ -11,7 +11,34 @@
 
 ## 本地运行
 
-### Web
+### 统一脚本
+
+```bash
+pnpm dev:start
+```
+
+常用命令：
+
+```bash
+pnpm dev:start
+pnpm dev:stop
+pnpm dev:restart
+pnpm dev:status
+pnpm dev:logs
+```
+
+脚本会负责：
+
+- 启动 FastAPI 服务到 `http://127.0.0.1:8000`
+- 启动 Vite 前端到 `http://127.0.0.1:5173`
+- 首次缺依赖时自动执行 `pnpm install`
+- 首次缺 API 虚拟环境时自动创建 `.venv` 并安装 `services/api` 依赖
+
+运行日志和 PID 文件会落到仓库根目录的 `.run/`。
+
+### 手动运行
+
+#### Web
 
 ```bash
 pnpm install
@@ -26,7 +53,7 @@ pnpm dev:web
 VITE_API_BASE_URL=http://127.0.0.1:8000 pnpm dev:web
 ```
 
-### API
+#### API
 
 ```bash
 cd services/api
@@ -48,4 +75,3 @@ Sprint 1 完成后，下一阶段建议进入文档摄取与切块：
 1. 增加上传入口与样例数据集
 2. 落地 `Document` / `Chunk` 持久化
 3. 提供 chunk 预览 API 和对应可视化界面
-

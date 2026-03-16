@@ -53,6 +53,17 @@ Web 首页承担学习界面的第一层职责：
 
 前端会优先请求 API；如果 API 未启动，则退回本地 JSON，保证静态学习页仍然可以独立运行。
 
+### `scripts/dev-stack.sh`
+
+本地开发统一通过这个脚本编排：
+
+- `start`: 同时启动 API 和 Web
+- `stop`: 关闭两个服务并清理 PID
+- `restart`: 顺序重启
+- `status` / `logs`: 查看运行状态和日志
+
+这样仓库对外只有一套稳定入口，不需要分别记忆前后端启动命令。
+
 ## 数据流
 
 ```text
@@ -71,4 +82,3 @@ packages/shared/rag-overview.json
 2. 在 `packages/shared` 稳定 `Document`、`Chunk`、`RetrievalResult` 等契约
 3. 在 `apps/web` 拆分出 `/learn`、`/lab/ingest` 等具体页面
 4. 再引入真正的向量索引、模型 provider 和评估能力
-

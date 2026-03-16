@@ -5,8 +5,12 @@
   "packageManager": "pnpm@10.2.1",
   "scripts": {
     "dev:web": "pnpm --filter @mist-rag/web dev",
+    "dev:start": "bash scripts/dev-stack.sh start",
+    "dev:stop": "bash scripts/dev-stack.sh stop",
+    "dev:restart": "bash scripts/dev-stack.sh restart",
+    "dev:status": "bash scripts/dev-stack.sh status",
+    "dev:logs": "bash scripts/dev-stack.sh logs",
     "build:web": "pnpm --filter @mist-rag/web build",
     "check:web": "pnpm --filter @mist-rag/web typecheck"
   }
 }
-
