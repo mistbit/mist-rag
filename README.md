@@ -1,10 +1,10 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1、阶段 2 与基础检索之间的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录 + top-k 检索实验 + retrieval trace history”的实验闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1、阶段 2 与基础检索之间的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录 + top-k 检索实验 + retrieval trace history + 分步骤引导实验台”的实验闭环。
 
 ## 当前内容
 
-- `apps/web`: React + Vite 学习首页，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
+- `apps/web`: React + Vite 学习首页与引导实验台，展示 RAG 关键流程、术语卡片和 Sprint 1 交付边界
 - `services/api`: FastAPI 服务，提供健康检查、RAG 总览、文档列表、文档保存、切块预览、chunk 历史、文档级 chunk 集合、索引构建和 top-k 检索接口
 - `packages/shared`: 前后端共享的基础类型定义与学习首页单一数据源 `rag-overview.json`
 - `datasets/demo-corpus`: 供实验区直接载入的样例文档
@@ -23,8 +23,23 @@
 - 可基于某个文档级 chunk 集合构建索引记录，观察向量维度、词表规模和基础 embedding 状态
 - 可基于某个 index build 直接输入 query，返回 top-k chunk 排序结果、阈值过滤后的结果与相似度分数
 - 检索结果可保存为 retrieval trace，并在页面里重新载入和回放
+- 前端提供 6 步引导式实验导航，按“选文档 -> preview -> 保存结果 -> 建索引 -> 检索 -> trace”推进
+- 引导实验台会根据当前实验状态自动聚焦下一步，并在页面顶部显示实验快照
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
+
+## 推荐学习路径
+
+推荐直接使用页面顶部的 Guided lab 区块，从上到下做一轮完整实验：
+
+1. 先选一篇样例文档，确认实验围绕哪份文本展开。
+2. 调整 `chunkSize` / `chunkOverlap` 并生成 preview，对比 chunk 数量、边界和平均长度。
+3. 把一次性 preview 保存成 chunk history，再把稳定结果保存成文档级 chunk 集合。
+4. 为某个 chunk 集合建立 index build，观察向量维度、词表规模和高频词。
+5. 输入 query，调 `topK` 和 `scoreThreshold`，比较召回结果和分数排序。
+6. 保存 retrieval trace，再从历史列表重新载入，回放这次检索实验。
+
+如果你只是想快速上手，推荐先使用默认样例文档，把 `280/60` 和 `160/20` 做一次对照，再看检索结果如何变化。
 
 ## 本地运行
 
