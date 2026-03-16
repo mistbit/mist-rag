@@ -28,7 +28,7 @@
 - 引导实验台提供 3 组实验预设，可一键切换 chunk 参数、query、top-k 和 threshold
 - 调整 chunk 参数时会保留当前文档绑定，便于直接把新的 preview 保存成同一文档下的 chunk 集合
 - 前端已拆成 `/learn` 与 `/lab` 两个路由，根路径会自动归一到 `/learn`
-- `/lab` 提供 A/B 对照实验面板，可固定当前 preview / search 状态并直接比较差异
+- `/lab` 提供 A/B 对照实验面板，可固定当前 preview / search 状态并直接比较差异词与命中文本
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -55,7 +55,7 @@
 
 1. 先生成一轮 preview 或跑一次检索，把当前状态固定到对照 `A`。
 2. 修改 chunk 参数、query 或 threshold，再把新状态固定到对照 `B`。
-3. 直接比较两边的 chunk 数、结果数、top score 和前两条命中内容。
+3. 直接比较两边的 chunk 数、结果数、top score，以及高亮出来的 query 命中词和槽位独有命中词。
 
 ## 页面入口
 

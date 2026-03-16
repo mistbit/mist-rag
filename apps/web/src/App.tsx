@@ -138,6 +138,104 @@ type ComparisonSnapshot = {
     | null;
 };
 
+type ComparisonTermInsight = {
+  queryTerms: Set<string>;
+  uniqueTerms: Set<string>;
+  uniquePreview: string[];
+  sharedPreview: string[];
+  paired: boolean;
+};
+
+type SegmentedTextPart = {
+  text: string;
+  normalized: string | null;
+};
+
+type SegmenterLikePart = {
+  segment: string;
+  isWordLike?: boolean;
+};
+
+type SegmenterLike = {
+  segment(input: string): Iterable<SegmenterLikePart>;
+};
+
+const ComparisonSegmenter = (
+  globalThis.Intl as typeof Intl & {
+    Segmenter?: new (locale: string, options: { granularity: "word" }) => SegmenterLike;
+  }
+).Segmenter;
+
+const comparisonSegmenter = ComparisonSegmenter ? new ComparisonSegmenter("zh-Hans", { granularity: "word" }) : null;
+
+function normalizeComparisonTerm(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function shouldKeepComparisonTerm(value: string) {
+  if (!value || /^\d+$/.test(value)) {
+    return false;
+  }
+
+  return /[\u4e00-\u9fff]/.test(value) || value.length > 2;
+}
+
+function segmentComparisonText(text: string): SegmentedTextPart[] {
+  if (comparisonSegmenter) {
+    return Array.from(comparisonSegmenter.segment(text)).map((part) => {
+      const normalized = part.isWordLike ? normalizeComparisonTerm(part.segment) : "";
+
+      return {
+        text: part.segment,
+        normalized: part.isWordLike && shouldKeepComparisonTerm(normalized) ? normalized : null,
+      };
+    });
+  }
+
+  return text
+    .split(/([A-Za-z0-9\u4e00-\u9fff-]+)/g)
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const isWordLike = /^[A-Za-z0-9\u4e00-\u9fff-]+$/.test(part);
+      const normalized = isWordLike ? normalizeComparisonTerm(part) : "";
+
+      return {
+        text: part,
+        normalized: isWordLike && shouldKeepComparisonTerm(normalized) ? normalized : null,
+      };
+    });
+}
+
+function collectComparisonTermCounts(texts: string[]) {
+  const counts = new Map<string, number>();
+
+  texts.forEach((text) => {
+    segmentComparisonText(text).forEach((part) => {
+      if (!part.normalized) {
+        return;
+      }
+
+      counts.set(part.normalized, (counts.get(part.normalized) ?? 0) + 1);
+    });
+  });
+
+  return counts;
+}
+
+function buildComparisonTermSet(terms: string[]) {
+  const normalizedTerms = new Set<string>();
+
+  terms.forEach((term) => {
+    const normalized = normalizeComparisonTerm(term);
+
+    if (shouldKeepComparisonTerm(normalized)) {
+      normalizedTerms.add(normalized);
+    }
+  });
+
+  return normalizedTerms;
+}
+
 const LAB_PRESETS: LabPreset[] = [
   {
     id: "balanced",
@@ -1339,6 +1437,79 @@ export default function App() {
     }));
   }
 
+  function getComparisonInsight(slotId: ComparisonSlotId): ComparisonTermInsight | null {
+    const snapshot = comparisonSlots[slotId];
+    if (!snapshot?.search) {
+      return null;
+    }
+
+    const queryTerms = buildComparisonTermSet(snapshot.search.queryTerms);
+    const counterpart = comparisonSlots[slotId === "A" ? "B" : "A"];
+
+    if (!counterpart?.search) {
+      return {
+        queryTerms,
+        uniqueTerms: new Set<string>(),
+        uniquePreview: [],
+        sharedPreview: [],
+        paired: false,
+      };
+    }
+
+    const sortTerms = (entries: Array<[string, number]>) =>
+      [...entries].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "zh-Hans"));
+
+    const currentCounts = collectComparisonTermCounts(snapshot.search.topResults.map((result) => result.text));
+    const counterpartCounts = collectComparisonTermCounts(counterpart.search.topResults.map((result) => result.text));
+
+    const uniqueTerms = sortTerms(
+      [...currentCounts.entries()].filter(([term]) => !counterpartCounts.has(term) && !queryTerms.has(term)),
+    ).map(([term]) => term);
+
+    const sharedPreview = sortTerms(
+      [...currentCounts.entries()].filter(([term]) => counterpartCounts.has(term) && !queryTerms.has(term)),
+    )
+      .map(([term]) => term)
+      .slice(0, 4);
+
+    return {
+      queryTerms,
+      uniqueTerms: new Set(uniqueTerms),
+      uniquePreview: uniqueTerms.slice(0, 5),
+      sharedPreview,
+      paired: true,
+    };
+  }
+
+  function renderHighlightedComparisonText(text: string, slotId: ComparisonSlotId, insight: ComparisonTermInsight) {
+    return segmentComparisonText(text).map((part, index) => {
+      if (!part.normalized) {
+        return part.text;
+      }
+
+      const isQueryTerm = insight.queryTerms.has(part.normalized);
+      const isUniqueTerm = insight.paired && insight.uniqueTerms.has(part.normalized);
+
+      if (!isQueryTerm && !isUniqueTerm) {
+        return part.text;
+      }
+
+      const className = [
+        "compare-mark",
+        isQueryTerm ? "compare-mark--query" : "",
+        isUniqueTerm ? `compare-mark--slot-${slotId.toLowerCase()}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return (
+        <mark key={`${slotId}-${index}-${part.text}`} className={className}>
+          {part.text}
+        </mark>
+      );
+    });
+  }
+
   function getGuideStepState(step: GuideStep) {
     if (step.done) {
       return "done";
@@ -1427,6 +1598,7 @@ export default function App() {
 
   function renderComparisonSlot(slotId: ComparisonSlotId) {
     const snapshot = comparisonSlots[slotId];
+    const insight = getComparisonInsight(slotId);
 
     if (!snapshot) {
       return (
@@ -1464,6 +1636,36 @@ export default function App() {
               query: {snapshot.search.query} · {snapshot.search.resultCount} results · threshold{" "}
               {snapshot.search.scoreThreshold.toFixed(2)}
             </p>
+            {insight ? (
+              <div className="compare-insight">
+                <div className="compare-chip-list">
+                  <span className="compare-chip compare-chip--query">query 命中词</span>
+                  {insight.paired ? (
+                    insight.uniquePreview.length > 0 ? (
+                      insight.uniquePreview.map((term) => (
+                        <span
+                          key={`${slotId}-${term}`}
+                          className={`compare-chip compare-chip--slot-${slotId.toLowerCase()}`}
+                        >
+                          {term}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="compare-chip">暂无明显差异词</span>
+                    )
+                  ) : (
+                    <span className="compare-chip">填满另一侧后显示差异词</span>
+                  )}
+                </div>
+                <p className="helper-text">
+                  {insight.paired
+                    ? insight.sharedPreview.length > 0
+                      ? `共享高频词：${insight.sharedPreview.join(" / ")}`
+                      : "当前高排名结果还没有明显共享词。"
+                    : "黄底是 query 命中词；填满另一侧以后，会额外高亮当前槽位独有的命中词。"}
+                </p>
+              </div>
+            ) : null}
             {snapshot.search.topResults.map((result) => (
               <article key={`${slotId}-${result.chunkId}`} className="compare-result-card">
                 <div className="chunk-card__meta">
@@ -1471,7 +1673,7 @@ export default function App() {
                   <span>{result.score.toFixed(4)}</span>
                   <span>{result.tokenCount} tokens</span>
                 </div>
-                <pre>{result.text}</pre>
+                <pre>{insight ? renderHighlightedComparisonText(result.text, slotId, insight) : result.text}</pre>
               </article>
             ))}
           </div>
@@ -1636,7 +1838,7 @@ export default function App() {
         <div className="section__heading">
           <p className="eyebrow">Comparison</p>
           <h2>把两次实验固定下来，直接看差异</h2>
-          <p>对照面板适合比较不同 chunk 参数、不同 query 或不同 threshold 的结果。先固定到 A，再调整参数后固定到 B。</p>
+          <p>对照面板适合比较不同 chunk 参数、不同 query 或不同 threshold 的结果。黄底表示 query 命中词，A/B 色块表示当前槽位独有的高排名命中词。</p>
         </div>
 
         <div className="compare-summary">
