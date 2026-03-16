@@ -106,6 +106,141 @@ li {
   padding: 42px 0 80px;
 }
 
+.route-shell,
+.route-hero,
+.learn-bridge__card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.route-shell::before,
+.route-hero::before,
+.learn-bridge__card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.32), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 36%);
+  pointer-events: none;
+}
+
+.route-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 22px 24px;
+}
+
+.route-shell__copy p:last-child,
+.route-shell__meta p {
+  margin-bottom: 0;
+}
+
+.route-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.route-switch__button {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(36, 31, 25, 0.1);
+  border-radius: 18px;
+  text-align: left;
+  color: inherit;
+  background: rgba(255, 251, 245, 0.88);
+  cursor: pointer;
+}
+
+.route-switch__button span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.route-switch__button strong {
+  font-size: 1rem;
+}
+
+.route-switch__button--active {
+  border-color: rgba(177, 84, 47, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(177, 84, 47, 0.18);
+  background: rgba(255, 245, 233, 0.95);
+}
+
+.route-shell__meta {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.route-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  gap: 20px;
+  padding: 28px;
+  margin-top: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 235, 0.96), rgba(242, 231, 214, 0.9)),
+    var(--panel);
+}
+
+.route-hero__copy p:last-child {
+  max-width: 680px;
+  margin-bottom: 0;
+}
+
+.route-hero__panel {
+  display: grid;
+  gap: 14px;
+}
+
+.route-hero__metric {
+  padding: 18px;
+  border: 1px solid rgba(36, 31, 25, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 251, 245, 0.74);
+}
+
+.route-hero__metric span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.route-hero__metric strong {
+  display: block;
+  margin-bottom: 6px;
+  font-family: "Fraunces", "Noto Sans SC", serif;
+  font-size: 1.48rem;
+}
+
+.learn-bridge__card {
+  padding: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 238, 0.96), rgba(242, 231, 217, 0.9)),
+    var(--panel);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.92fr);
@@ -820,6 +955,8 @@ dd {
 }
 
 @media (max-width: 1100px) {
+  .route-shell,
+  .route-hero,
   .guide-board__hero,
   .guide-inspector,
   .lab__grid,
@@ -832,12 +969,17 @@ dd {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .route-shell__meta {
+    justify-items: start;
+  }
+
   .lab-panel--sticky {
     position: static;
   }
 }
 
 @media (max-width: 900px) {
+  .route-switch,
   .hero,
   .flow-grid,
   .form-row,
@@ -855,6 +997,9 @@ dd {
 
   .hero__copy,
   .hero__panel,
+  .route-shell,
+  .route-hero,
+  .learn-bridge__card,
   .flow-card,
   .glossary-card,
   .milestone-card,
