@@ -384,6 +384,13 @@ dd {
   gap: 12px;
 }
 
+.chunk-set-editor {
+  display: grid;
+  gap: 14px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(31, 31, 25, 0.08);
+}
+
 .document-card {
   width: 100%;
   border: 1px solid rgba(31, 31, 25, 0.1);

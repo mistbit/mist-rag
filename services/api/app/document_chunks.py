@@ -12,6 +12,7 @@ from .schemas import (
     DocumentChunkSetRecord,
     DocumentChunkSetSummary,
     SaveDocumentChunkSetRequest,
+    UpdateDocumentChunkSetRequest,
 )
 
 
@@ -43,10 +44,13 @@ def _to_summary(record: DocumentChunkSetRecord) -> DocumentChunkSetSummary:
         id=record.id,
         documentId=record.document_id,
         documentTitle=record.document_title,
+        label=record.label,
+        notes=record.notes,
         totalChunks=record.preview_response.stats.totalChunks,
         chunkSize=record.preview_request.chunk_size,
         chunkOverlap=record.preview_request.chunk_overlap,
         createdAt=record.created_at,
+        updatedAt=record.updated_at,
     )
 
 
@@ -84,11 +88,16 @@ def delete_document_chunk_sets_for_document(document_id: str) -> int:
     return deleted_count
 
 
+def _default_chunk_set_label(document_title: str, chunk_size: int, chunk_overlap: int) -> str:
+    return f"{document_title} · {chunk_size}/{chunk_overlap}"
+
+
 def save_document_chunk_set(document_id: str, payload: SaveDocumentChunkSetRequest) -> DocumentChunkSetRecord | None:
     document = get_document(document_id)
     if document is None:
         return None
 
+    now = _utc_now()
     preview_request = ChunkPreviewRequest(
         title=document.title,
         sourceType=document.source_type,
@@ -102,7 +111,10 @@ def save_document_chunk_set(document_id: str, payload: SaveDocumentChunkSetReque
         id=f"chunkset-{uuid.uuid4().hex[:10]}",
         documentId=document.id,
         documentTitle=document.title,
-        createdAt=_utc_now(),
+        label=payload.label or _default_chunk_set_label(document.title, payload.chunk_size, payload.chunk_overlap),
+        notes=payload.notes,
+        createdAt=now,
+        updatedAt=now,
         previewRequest=preview_request,
         previewResponse=preview_response,
     )
@@ -111,3 +123,28 @@ def save_document_chunk_set(document_id: str, payload: SaveDocumentChunkSetReque
     records.append(record)
     _write_document_chunk_sets(records)
     return record
+
+
+def update_document_chunk_set(chunk_set_id: str, payload: UpdateDocumentChunkSetRequest) -> DocumentChunkSetRecord | None:
+    records = _load_document_chunk_sets()
+    updated_record: DocumentChunkSetRecord | None = None
+
+    for index, record in enumerate(records):
+        if record.id != chunk_set_id:
+            continue
+
+        updated_record = record.model_copy(
+            update={
+                "label": payload.label,
+                "notes": payload.notes,
+                "updated_at": _utc_now(),
+            }
+        )
+        records[index] = updated_record
+        break
+
+    if updated_record is None:
+        return None
+
+    _write_document_chunk_sets(records)
+    return updated_record

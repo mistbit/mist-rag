@@ -1,6 +1,6 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理”的 ingest 闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注”的 ingest 闭环。
 
 ## 当前内容
 
@@ -19,7 +19,7 @@
 - API 支持 `chunkSize` / `chunkOverlap` 参数的切块预览
 - 当前 preview 结果可保存成 chunk 历史记录，并可重新载入当时的参数和结果
 - 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
-- 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除
+- 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除、命名和备注
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -93,6 +93,7 @@ uvicorn app.main:app --reload --port 8000
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
+- `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
 
 `GET /api/v1/documents` 会返回两个列表：
@@ -110,7 +111,18 @@ uvicorn app.main:app --reload --port 8000
 ```json
 {
   "chunkSize": 280,
-  "chunkOverlap": 60
+  "chunkOverlap": 60,
+  "label": "教学版 280/60",
+  "notes": "更适合初学者观察段落边界。"
+}
+```
+
+`PATCH /api/v1/chunk-sets/{chunk_set_id}` 请求示例：
+
+```json
+{
+  "label": "高精度小块",
+  "notes": "用于对比更小 chunk 下的召回颗粒度。"
 }
 ```
 
@@ -123,6 +135,11 @@ uvicorn app.main:app --reload --port 8000
 
 - 删除 `saved` 文档时，会级联清理这个文档下的 chunk 集合
 - 删除 chunk 集合时，不会删除文档本身
+
+命名规则：
+
+- 创建 chunk 集合时，如果未传 `label`，系统会用 `文档标题 · chunkSize/chunkOverlap` 生成默认名称
+- `notes` 用于记录为什么要保留这组切块结果
 
 `POST /api/v1/documents` 请求示例：
 
@@ -164,9 +181,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成文档级 chunk 集合管理之后，下一步建议继续推进文档摄取：
+完成文档级 chunk 集合命名备注之后，下一步建议继续推进文档摄取：
 
-1. 为文档级 chunk 集合增加命名和更新时间展示
-2. 把 `Chunk` 持久化和文档保存真正关联起来
+1. 把 `Chunk` 持久化和文档保存真正关联起来
+2. 为文档和 chunk 集合增加更新时间与筛选能力
 3. 引入真正的 dataset 管理与状态页
 4. 再进入 embedding 和索引构建

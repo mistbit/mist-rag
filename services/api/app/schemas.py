@@ -182,6 +182,8 @@ class SaveDocumentChunkSetRequest(BaseModel):
 
     chunk_size: int = Field(alias="chunkSize", ge=120, le=1200)
     chunk_overlap: int = Field(alias="chunkOverlap", ge=0, le=400)
+    label: str = Field(default="", max_length=120)
+    notes: str = Field(default="", max_length=500)
 
     @field_validator("chunk_overlap")
     @classmethod
@@ -191,6 +193,23 @@ class SaveDocumentChunkSetRequest(BaseModel):
             raise ValueError("chunkOverlap must be smaller than chunkSize.")
         return value
 
+    @field_validator("label", "notes")
+    @classmethod
+    def normalize_text_field(cls, value: str) -> str:
+        return value.strip()
+
+
+class UpdateDocumentChunkSetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    label: str = Field(default="", min_length=1, max_length=120)
+    notes: str = Field(default="", max_length=500)
+
+    @field_validator("label", "notes")
+    @classmethod
+    def normalize_update_field(cls, value: str) -> str:
+        return value.strip()
+
 
 class DocumentChunkSetSummary(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -198,10 +217,13 @@ class DocumentChunkSetSummary(BaseModel):
     id: str
     document_id: str = Field(alias="documentId")
     document_title: str = Field(alias="documentTitle")
+    label: str = ""
+    notes: str = ""
     total_chunks: int = Field(alias="totalChunks")
     chunk_size: int = Field(alias="chunkSize")
     chunk_overlap: int = Field(alias="chunkOverlap")
     created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
 
 
 class DocumentChunkSetRecord(BaseModel):
@@ -210,7 +232,10 @@ class DocumentChunkSetRecord(BaseModel):
     id: str
     document_id: str = Field(alias="documentId")
     document_title: str = Field(alias="documentTitle")
+    label: str = ""
+    notes: str = ""
     created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
     preview_request: ChunkPreviewRequest = Field(alias="previewRequest")
     preview_response: ChunkPreviewResponse = Field(alias="previewResponse")
 

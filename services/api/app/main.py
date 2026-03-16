@@ -12,6 +12,7 @@ from .document_chunks import (
     get_document_chunk_set,
     list_document_chunk_sets,
     save_document_chunk_set,
+    update_document_chunk_set,
 )
 from .documents import delete_document, get_document, list_documents, save_document
 from .schemas import (
@@ -27,6 +28,7 @@ from .schemas import (
     SaveDocumentChunkSetRequest,
     SaveChunkRunRequest,
     SaveDocumentRequest,
+    UpdateDocumentChunkSetRequest,
 )
 
 
@@ -131,6 +133,14 @@ def remove_document_chunk_set(chunk_set_id: str) -> dict[str, str]:
     if not deleted:
         raise HTTPException(status_code=404, detail="Document chunk set not found.")
     return {"status": "deleted", "id": chunk_set_id}
+
+
+@app.patch("/api/v1/chunk-sets/{chunk_set_id}", response_model=DocumentChunkSetRecord)
+def update_chunk_set(chunk_set_id: str, payload: UpdateDocumentChunkSetRequest) -> DocumentChunkSetRecord:
+    record = update_document_chunk_set(chunk_set_id, payload)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    return record
 
 
 @app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)

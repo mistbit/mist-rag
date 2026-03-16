@@ -1,4 +1,4 @@
-# Mist RAG Sprint 4 Architecture
+# Mist RAG Sprint 4.5 Architecture
 
 ## 目标
 
@@ -13,6 +13,7 @@
 - 增加已保存文档和 chunk 历史的删除管理
 - 增加文档级 chunk 集合，把切块结果真正绑定到文档
 - 增加文档级 chunk 集合的删除管理
+- 增加文档级 chunk 集合的命名与备注
 
 这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的第一步真正变成一个可运行闭环。
 
@@ -50,7 +51,7 @@ mist-rag/
 
 ### `services/api`
 
-FastAPI 服务当前承担八类能力：
+FastAPI 服务当前承担九类能力：
 
 - 输出健康状态，便于前端或后续容器探活
 - 读取共享 JSON，暴露统一的 `overview` 数据
@@ -61,6 +62,7 @@ FastAPI 服务当前承担八类能力：
 - 删除 chunk 历史记录
 - 保存并读取文档级 chunk 集合
 - 删除文档级 chunk 集合，并在文档删除时级联清理
+- 更新文档级 chunk 集合的名称和备注
 
 其中切块逻辑仍然保持“轻实现”：
 
@@ -83,6 +85,7 @@ FastAPI 服务当前承担八类能力：
 - 删除 chunk 历史不会联动删除文档
 - 删除文档会级联删除它的文档级 chunk 集合
 - 删除文档级 chunk 集合不会删除文档
+- 文档级 chunk 集合默认会生成系统名称，但支持后续人工命名和备注
 
 ### `apps/web`
 
@@ -97,6 +100,7 @@ Web 端当前承担两层职责：
 - 提供删除操作，让实验区进入基础“可管理”状态
 - 提供文档级 chunk 集合，让切块结果开始和具体文档建立稳定关系
 - 提供文档级 chunk 集合删除，让这一层能力也具备基础维护能力
+- 提供文档级 chunk 集合名称和备注，方便区分不同切块策略
 
 前端会优先请求 API；如果 API 未启动，则首页总览仍会退回本地 JSON。切块实验区则依赖真实 API。
 
@@ -133,6 +137,7 @@ apps/web/src/App.tsx
   ├─> DELETE /api/v1/chunk-runs/{id}
   ├─> GET /api/v1/chunk-sets/{id}
   ├─> DELETE /api/v1/chunk-sets/{id}
+  ├─> PATCH /api/v1/chunk-sets/{id}
   └─> POST /api/v1/chunk-preview
         ├─> services/api/app/documents.py
         │     ├─> datasets/demo-corpus
@@ -149,7 +154,7 @@ apps/web/src/App.tsx
 
 当进入阶段 1 和阶段 2 时，建议沿着下面的方向扩展：
 
-1. 在 `services/api` 增加文档级 chunk 集合更新、重命名和 PDF 解析
+1. 在 `services/api` 增加 PDF 解析和后续向量索引入口
 2. 在 `packages/shared` 继续稳定 `Document`、`Chunk`、`RetrievalResult` 等契约
 3. 在 `apps/web` 拆分出 `/learn`、`/lab/ingest` 等具体页面
 4. 再引入真正的向量索引、模型 provider 和评估能力

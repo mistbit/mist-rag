@@ -16,6 +16,7 @@
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
+- `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
 
 说明：
@@ -31,4 +32,5 @@
 - `DELETE /api/v1/chunk-runs/{run_id}` 会删除指定的历史记录
 - `GET /api/v1/chunk-sets/{chunk_set_id}` 会返回某个文档级 chunk 集合的完整参数和 chunk 结果
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}` 会删除指定的文档级 chunk 集合，不影响原文档
+- `PATCH /api/v1/chunk-sets/{chunk_set_id}` 可以更新该集合的 `label` 和 `notes`
 - 已开启对 `http://127.0.0.1:5173` 和 `http://localhost:5173` 的本地 CORS 支持

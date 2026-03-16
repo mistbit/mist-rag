@@ -76,6 +76,8 @@ export default function App() {
   const [runSaveMessage, setRunSaveMessage] = useState("");
   const [chunkSetSaveStatus, setChunkSetSaveStatus] = useState<AsyncStatus>("idle");
   const [chunkSetSaveMessage, setChunkSetSaveMessage] = useState("");
+  const [chunkSetLabelDraft, setChunkSetLabelDraft] = useState("");
+  const [chunkSetNotesDraft, setChunkSetNotesDraft] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +179,8 @@ export default function App() {
     setSelectedChunkSetId(null);
     setChunkSetSaveStatus("idle");
     setChunkSetSaveMessage("");
+    setChunkSetLabelDraft("");
+    setChunkSetNotesDraft("");
   }
 
   async function runPreview(request: ChunkPreviewRequest) {
@@ -334,6 +338,8 @@ export default function App() {
       setPreviewResult(record.previewResponse);
       setPreviewStatus("success");
       setPreviewError("");
+      setChunkSetLabelDraft(record.label);
+      setChunkSetNotesDraft(record.notes);
       setChunkSetSaveStatus("saved");
       setChunkSetSaveMessage("已载入文档级 chunk 集合。");
     } catch (error) {
@@ -362,6 +368,8 @@ export default function App() {
 
       if (selectedChunkSetId === chunkSetId) {
         setSelectedChunkSetId(null);
+        setChunkSetLabelDraft("");
+        setChunkSetNotesDraft("");
       }
 
       setChunkSetSaveStatus("saved");
@@ -528,6 +536,8 @@ export default function App() {
         body: JSON.stringify({
           chunkSize: previewRequest.chunkSize,
           chunkOverlap: previewRequest.chunkOverlap,
+          label: chunkSetLabelDraft,
+          notes: chunkSetNotesDraft,
         }),
       });
 
@@ -538,6 +548,8 @@ export default function App() {
 
       const record = (await response.json()) as DocumentChunkSetRecord;
       setSelectedChunkSetId(record.id);
+      setChunkSetLabelDraft(record.label);
+      setChunkSetNotesDraft(record.notes);
       setChunkSetSaveStatus("saved");
       setChunkSetSaveMessage(`已为文档保存 chunk 集合 ${record.id}`);
       setPreviewRequest(record.previewRequest);
@@ -547,6 +559,45 @@ export default function App() {
     } catch (error) {
       setChunkSetSaveStatus("error");
       setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to save document chunk set.");
+    }
+  }
+
+  async function handleUpdateDocumentChunkSet() {
+    if (!selectedChunkSetId) {
+      return;
+    }
+
+    setChunkSetSaveStatus("loading");
+    setChunkSetSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-sets/${selectedChunkSetId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          label: chunkSetLabelDraft,
+          notes: chunkSetNotesDraft,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as DocumentChunkSetRecord;
+      setChunkSetLabelDraft(record.label);
+      setChunkSetNotesDraft(record.notes);
+      setChunkSetSaveStatus("saved");
+      setChunkSetSaveMessage(`已更新文档级 chunk 集合 ${record.label}`);
+      if (selectedDocumentId) {
+        await loadDocumentChunkSets(selectedDocumentId);
+      }
+    } catch (error) {
+      setChunkSetSaveStatus("error");
+      setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to update document chunk set.");
     }
   }
 
@@ -718,9 +769,12 @@ export default function App() {
                         onClick={() => void handleDocumentChunkSetSelect(record.id)}
                       >
                         <div className="document-card__meta">
-                          <strong>{record.documentTitle}</strong>
+                          <strong>{record.label}</strong>
                           <span>{record.totalChunks} chunks</span>
                         </div>
+                        <p>
+                          {record.notes || "没有备注。"}
+                        </p>
                         <p>
                           chunkSize {record.chunkSize} / overlap {record.chunkOverlap}
                         </p>
@@ -742,6 +796,36 @@ export default function App() {
                   ))}
                 </div>
               )}
+
+              {selectedChunkSetId ? (
+                <div className="chunk-set-editor">
+                  <div className="form-field">
+                    <label htmlFor="chunkSetLabel">集合名称</label>
+                    <input
+                      id="chunkSetLabel"
+                      value={chunkSetLabelDraft}
+                      maxLength={120}
+                      onChange={(event) => setChunkSetLabelDraft(event.target.value)}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="chunkSetNotes">备注</label>
+                    <textarea
+                      id="chunkSetNotes"
+                      rows={4}
+                      value={chunkSetNotesDraft}
+                      maxLength={500}
+                      onChange={(event) => setChunkSetNotesDraft(event.target.value)}
+                    />
+                  </div>
+                  <div className="lab-actions">
+                    <button type="button" className="secondary-button" onClick={() => void handleUpdateDocumentChunkSet()}>
+                      更新集合信息
+                    </button>
+                    <p className="helper-text">命名和备注有助于区分不同切块策略，例如“教学版 280/60”或“更高精度小块”。</p>
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <section className="lab-panel">
