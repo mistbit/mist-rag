@@ -70,6 +70,20 @@ const EMPTY_RETRIEVAL_TRACE_CATALOG: RetrievalTraceCatalogResponse = {
 type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
+type GuideStepId = "document" | "preview" | "results" | "index" | "search" | "trace";
+
+type GuideStep = {
+  id: GuideStepId;
+  step: string;
+  targetId: string;
+  title: string;
+  summary: string;
+  action: string;
+  testHint: string;
+  resultHint: string;
+  ready: boolean;
+  done: boolean;
+};
 
 export default function App() {
   const [overview, setOverview] = useState<RagOverview>(fallbackOverview as RagOverview);
@@ -118,6 +132,7 @@ export default function App() {
   const [retrievalTraceCatalogError, setRetrievalTraceCatalogError] = useState("");
   const [retrievalTraceStatus, setRetrievalTraceStatus] = useState<AsyncStatus>("idle");
   const [retrievalTraceMessage, setRetrievalTraceMessage] = useState("");
+  const [activeGuideStepId, setActiveGuideStepId] = useState<GuideStepId>("document");
 
   useEffect(() => {
     let cancelled = false;
@@ -352,12 +367,14 @@ export default function App() {
       sourceType,
       content,
     }));
+    setActiveGuideStepId("preview");
 
     event.target.value = "";
   }
 
   function updateRequest<K extends keyof ChunkPreviewRequest>(key: K, value: ChunkPreviewRequest[K]) {
     resetSelections();
+    setActiveGuideStepId("preview");
     setPreviewRequest((current) => ({
       ...current,
       [key]: value,
@@ -392,6 +409,7 @@ export default function App() {
       clearIndexBuilds();
       await loadDocumentChunkSets(document.id);
       await runPreview(nextRequest);
+      setActiveGuideStepId("preview");
     } catch (error) {
       setDocumentSaveStatus("error");
       setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to load document.");
@@ -421,6 +439,7 @@ export default function App() {
         clearDocumentChunkSets();
       }
       clearIndexBuilds();
+      setActiveGuideStepId("results");
     } catch (error) {
       setRunSaveStatus("error");
       setRunSaveMessage(error instanceof Error ? error.message : "Unable to load chunk run.");
@@ -448,6 +467,7 @@ export default function App() {
       setChunkSetSaveMessage("已载入文档级 chunk 集合。");
       clearIndexBuilds();
       await loadIndexBuildCatalog(record.id);
+      setActiveGuideStepId("index");
     } catch (error) {
       setChunkSetSaveStatus("error");
       setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to load document chunk set.");
@@ -471,6 +491,7 @@ export default function App() {
       await loadRetrievalTraceCatalog(record.id);
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage("已载入索引构建记录。");
+      setActiveGuideStepId("search");
     } catch (error) {
       setIndexBuildActionStatus("error");
       setIndexBuildActionMessage(error instanceof Error ? error.message : "Unable to load index build.");
@@ -543,6 +564,7 @@ export default function App() {
       setDocumentSaveMessage(`已保存为 ${document.title}`);
       await loadDocumentCatalog();
       await loadDocumentChunkSets(document.id);
+      setActiveGuideStepId("preview");
     } catch (error) {
       setDocumentSaveStatus("error");
       setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to save document.");
@@ -612,6 +634,7 @@ export default function App() {
       setRunSaveStatus("saved");
       setRunSaveMessage(`已保存切块记录 ${run.id}`);
       await loadRunCatalog();
+      setActiveGuideStepId("results");
     } catch (error) {
       setRunSaveStatus("error");
       setRunSaveMessage(error instanceof Error ? error.message : "Unable to save chunk run.");
@@ -687,6 +710,7 @@ export default function App() {
       setPreviewStatus("success");
       clearIndexBuilds();
       await loadDocumentChunkSets(record.documentId);
+      setActiveGuideStepId("index");
     } catch (error) {
       setChunkSetSaveStatus("error");
       setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to save document chunk set.");
@@ -765,6 +789,7 @@ export default function App() {
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage(`已构建索引 ${record.id}`);
       await loadIndexBuildCatalog(record.chunkSetId);
+      setActiveGuideStepId("search");
     } catch (error) {
       setIndexBuildActionStatus("error");
       setIndexBuildActionMessage(error instanceof Error ? error.message : "Unable to create index build.");
@@ -801,6 +826,7 @@ export default function App() {
       setSearchResult(record);
       setSearchStatus("saved");
       setSearchMessage(`已返回 top ${record.results.length} 检索结果。`);
+      setActiveGuideStepId("trace");
     } catch (error) {
       setSearchStatus("error");
       setSearchMessage(error instanceof Error ? error.message : "Unable to search index build.");
@@ -839,6 +865,7 @@ export default function App() {
       setRetrievalTraceStatus("saved");
       setRetrievalTraceMessage(`已保存检索轨迹 ${trace.id}`);
       await loadRetrievalTraceCatalog(trace.buildId);
+      setActiveGuideStepId("trace");
     } catch (error) {
       setRetrievalTraceStatus("error");
       setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to save retrieval trace.");
@@ -863,6 +890,7 @@ export default function App() {
       setSearchMessage(`已载入检索轨迹 ${trace.id}`);
       setRetrievalTraceStatus("saved");
       setRetrievalTraceMessage("已载入检索轨迹。");
+      setActiveGuideStepId("trace");
     } catch (error) {
       setRetrievalTraceStatus("error");
       setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to load retrieval trace.");
@@ -902,6 +930,196 @@ export default function App() {
       setRetrievalTraceStatus("error");
       setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to delete retrieval trace.");
     }
+  }
+
+  const allDocuments = [...documentCatalog.samples, ...documentCatalog.saved];
+  const selectedDocumentSummary = allDocuments.find((item) => item.id === selectedDocumentId) ?? null;
+  const selectedChunkSetSummary = chunkSetCatalog.sets.find((item) => item.id === selectedChunkSetId) ?? null;
+  const selectedIndexBuildSummary =
+    indexBuildCatalog.builds.find((item) => item.id === selectedIndexBuildId) ?? selectedIndexBuild ?? null;
+  const selectedTraceSummary = retrievalTraceCatalog.traces.find((item) => item.id === selectedTraceId) ?? null;
+  const hasPreviewResult = previewStatus === "success" && Boolean(previewResult);
+  const hasSavedResultAsset =
+    runCatalog.runs.length > 0 ||
+    chunkSetCatalog.sets.length > 0 ||
+    runSaveStatus === "saved" ||
+    chunkSetSaveStatus === "saved";
+  const hasChunkSet = Boolean(selectedChunkSetId || chunkSetCatalog.sets.length);
+  const hasIndexBuild = Boolean(selectedIndexBuildId || indexBuildCatalog.builds.length);
+  const hasSearchResult = Boolean(searchResult);
+  const hasTrace = Boolean(selectedTraceId || retrievalTraceCatalog.traces.length);
+
+  const guideSteps: GuideStep[] = [
+    {
+      id: "document",
+      step: "01",
+      targetId: "guide-document",
+      title: "选中学习文档",
+      summary: "先从样例文档开始，理解后续所有状态都围绕哪一篇文档展开。",
+      action: "从左侧文档库点开一篇样例，或先保存你自己编辑的文档。",
+      testHint: "先加载样例，再换成你自己的 Markdown，观察文档长度和摘要是否变化。",
+      resultHint: selectedDocumentSummary ? `当前文档已锁定为「${selectedDocumentSummary.title}」` : "选中后会看到后续 chunk 集合开始和这篇文档绑定。",
+      ready: true,
+      done: Boolean(selectedDocumentId),
+    },
+    {
+      id: "preview",
+      step: "02",
+      targetId: "guide-preview",
+      title: "调整参数并生成预览",
+      summary: "通过 chunkSize 和 overlap 学会切块是如何改变检索输入的。",
+      action: "修改 chunk 参数后重新生成预览，重点看 chunk 数量、边界和平均长度。",
+      testHint: "推荐先试 280/60，再改成 160/20，对比 chunk 数和每块内容。",
+      resultHint: previewResult
+        ? `你已经拿到 ${previewResult.stats.totalChunks} 个 chunk，可以继续保存成实验记录或稳定集合。`
+        : "预览生成后，右侧会立刻显示 chunk 结果。",
+      ready: previewRequest.content.trim().length > 0,
+      done: hasPreviewResult,
+    },
+    {
+      id: "results",
+      step: "03",
+      targetId: "guide-results",
+      title: "保存实验结果",
+      summary: "把一次性预览分成两类资产：历史记录和文档级 chunk 集合。",
+      action: "先保存一次 chunk run，再把觉得稳定的结果保存为文档级 chunk 集合。",
+      testHint: "保存一条 chunk run，再保存一个命名清晰的 chunk set，比如“教学版 280/60”。",
+      resultHint:
+        hasSavedResultAsset
+          ? `当前已有 ${runCatalog.runs.length} 条切块历史、${chunkSetCatalog.sets.length} 个稳定 chunk 集合。`
+          : "保存后你会在左侧看到可回放的历史和可复用的 chunk 集合。",
+      ready: Boolean(previewResult),
+      done: hasSavedResultAsset,
+    },
+    {
+      id: "index",
+      step: "04",
+      targetId: "guide-index",
+      title: "为 chunk 集合建立索引",
+      summary: "索引是 query 和 chunk 进入同一向量空间的准备动作。",
+      action: "选中一个 chunk 集合后，为它创建一条 index build。",
+      testHint: "先用默认的 demo-hash-v1 构建，再观察向量维度、词表规模和高频词。",
+      resultHint: selectedIndexBuildSummary
+        ? `当前索引使用 ${selectedIndexBuildSummary.embeddingModel}，共 ${selectedIndexBuildSummary.totalVectors} 个向量。`
+        : "索引建立后，你会看到向量数、维度和词表统计。",
+      ready: hasChunkSet,
+      done: hasIndexBuild,
+    },
+    {
+      id: "search",
+      step: "05",
+      targetId: "guide-search",
+      title: "运行 top-k 检索",
+      summary: "把 query 投到向量空间里，观察哪些 chunk 被召回、排序为什么变。",
+      action: "输入 query，调 topK 和 threshold，观察返回结果的 rank 与 score。",
+      testHint: "先问一个泛问题，再换成更具体的问题，并把 threshold 从 0 调到 0.25。",
+      resultHint: searchResult
+        ? `当前最近一次检索返回 ${searchResult.results.length} 条结果，最高分 ${searchResult.results[0]?.score.toFixed(4) ?? "0.0000"}。`
+        : "检索后你会在索引面板下方看到排序结果和 query terms。",
+      ready: hasIndexBuild,
+      done: hasSearchResult,
+    },
+    {
+      id: "trace",
+      step: "06",
+      targetId: "guide-trace",
+      title: "保存并回放 trace",
+      summary: "把一次检索实验固化下来，方便后续对比 query、threshold 和结果变化。",
+      action: "保存检索轨迹，然后从历史列表里重新载入一条 trace。",
+      testHint: "保存两次不同 query 或不同 threshold 的检索，比较 trace 列表里的返回数量。",
+      resultHint:
+        retrievalTraceCatalog.traces.length > 0
+          ? `当前索引下已有 ${retrievalTraceCatalog.traces.length} 条 trace。`
+          : "保存后你可以反复回放同一条检索实验。",
+      ready: Boolean(selectedIndexBuildId || retrievalTraceCatalog.traces.length || searchResult),
+      done: hasTrace,
+    },
+  ];
+
+  const completedGuideSteps = guideSteps.filter((step) => step.done).length;
+  const activeGuideStep = guideSteps.find((step) => step.id === activeGuideStepId) ?? guideSteps[0];
+  const recommendedGuideStep = guideSteps.find((step) => step.ready && !step.done) ?? guideSteps[guideSteps.length - 1];
+
+  const experimentSnapshot = [
+    {
+      label: "当前文档",
+      value: selectedDocumentSummary?.title ?? "未锁定",
+      meta: selectedDocumentSummary ? `${selectedDocumentSummary.charCount} chars` : "先从文档库选择一篇",
+    },
+    {
+      label: "Chunk 集合",
+      value: selectedChunkSetSummary?.label ?? "未保存",
+      meta: selectedChunkSetSummary
+        ? `${selectedChunkSetSummary.totalChunks} chunks`
+        : previewResult
+          ? "可以从预览结果直接保存"
+          : "先生成一次 preview",
+    },
+    {
+      label: "Index build",
+      value: selectedIndexBuildSummary?.embeddingModel ?? "未构建",
+      meta: selectedIndexBuildSummary
+        ? `${selectedIndexBuildSummary.totalVectors} vectors`
+        : "索引建立后才可检索",
+    },
+    {
+      label: "最近结果",
+      value: searchResult ? `${searchResult.results.length} hits` : "未检索",
+      meta: searchResult ? `topK ${searchResult.topK} / threshold ${searchResult.scoreThreshold.toFixed(2)}` : "运行一次 top-k 检索",
+    },
+    {
+      label: "最近 trace",
+      value: selectedTraceSummary?.query ?? "未保存",
+      meta: selectedTraceSummary ? `${selectedTraceSummary.totalResults} results` : "保存检索轨迹后可回放",
+    },
+  ];
+
+  useEffect(() => {
+    const activeStep = guideSteps.find((step) => step.id === activeGuideStepId);
+    if (!activeStep) {
+      setActiveGuideStepId(recommendedGuideStep.id);
+      return;
+    }
+
+    if (getGuideStepState(activeStep) === "locked") {
+      setActiveGuideStepId(recommendedGuideStep.id);
+    }
+  }, [
+    activeGuideStepId,
+    recommendedGuideStep.id,
+    selectedDocumentId,
+    hasPreviewResult,
+    hasSavedResultAsset,
+    hasChunkSet,
+    hasIndexBuild,
+    hasSearchResult,
+    hasTrace,
+  ]);
+
+  function getGuideStepState(step: GuideStep) {
+    if (step.done) {
+      return "done";
+    }
+
+    if (step.ready) {
+      return "ready";
+    }
+
+    return "locked";
+  }
+
+  function focusGuideStep(stepId: GuideStepId) {
+    setActiveGuideStepId(stepId);
+
+    const step = guideSteps.find((item) => item.id === stepId);
+    if (!step) {
+      return;
+    }
+
+    globalThis.document?.getElementById(step.targetId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   function renderDocumentSection(title: string, items: DocumentCatalogResponse["samples"]) {
@@ -1000,15 +1218,91 @@ export default function App() {
         </div>
       </section>
 
+      <section className="section guide-board">
+        <div className="guide-board__hero">
+          <div className="section__heading">
+            <p className="eyebrow">Guided lab</p>
+            <h2>按 6 个动作完成一次可回放的 RAG 实验</h2>
+            <p>从选文档开始，一路走到保存 trace。每一步都给你测试建议和预期结果，不需要自己猜下一步该点哪里。</p>
+          </div>
+
+          <article className="guide-brief">
+            <span className="guide-brief__label">学习进度</span>
+            <strong>
+              {completedGuideSteps}/{guideSteps.length}
+            </strong>
+            <p>{recommendedGuideStep.action}</p>
+            <button type="button" className="primary-button" onClick={() => focusGuideStep(recommendedGuideStep.id)}>
+              跳到建议步骤
+            </button>
+          </article>
+        </div>
+
+        <div className="guide-progress">
+          {guideSteps.map((step) => {
+            const state = getGuideStepState(step);
+
+            return (
+              <button
+                key={step.id}
+                type="button"
+                className={`guide-step guide-step--${state} ${activeGuideStep.id === step.id ? "guide-step--active" : ""}`}
+                onClick={() => focusGuideStep(step.id)}
+              >
+                <span className="guide-step__index">{step.step}</span>
+                <div className="guide-step__body">
+                  <strong>{step.title}</strong>
+                  <p>{step.summary}</p>
+                </div>
+                <span className="guide-step__state">
+                  {state === "done" ? "已完成" : state === "ready" ? "现在可做" : "等待前一步"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="guide-inspector">
+          <article className="guide-inspector__card">
+            <p className="eyebrow">Current step</p>
+            <h3>
+              Step {activeGuideStep.step} · {activeGuideStep.title}
+            </h3>
+            <p>{activeGuideStep.action}</p>
+            <dl>
+              <div>
+                <dt>怎么测试</dt>
+                <dd>{activeGuideStep.testHint}</dd>
+              </div>
+              <div>
+                <dt>你会看到什么</dt>
+                <dd>{activeGuideStep.resultHint}</dd>
+              </div>
+            </dl>
+          </article>
+
+          <div className="snapshot-grid">
+            {experimentSnapshot.map((item) => (
+              <article key={item.label} className="snapshot-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <p>{item.meta}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="section lab">
         <div className="section__heading">
-          <p className="eyebrow">Ingest lab</p>
-          <h2>文档、chunk 集合、索引、检索与 trace 形成第三层闭环</h2>
+          <p className="eyebrow">Guided workspace</p>
+          <h2>工作区会跟着实验步骤推进，未到的区块会弱化显示</h2>
+          <p>推荐顺序是：选文档 → 改参数看 preview → 保存结果 → 建索引 → 跑检索 → 回放 trace。</p>
         </div>
 
         <div className="lab__grid">
           <div className="lab__stack">
-            <section className="lab-panel">
+            <section id="guide-document" className="lab-panel">
               <div className="lab-result__header">
                 <div>
                   <p className="eyebrow">Document library</p>
@@ -1017,6 +1311,11 @@ export default function App() {
                 <span className={`status-pill status-pill--${documentCatalogStatus === "error" ? "fallback" : "online"}`}>
                   {documentCatalogStatus}
                 </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 01</span>
+                <p>先选定这次实验围绕哪篇文档展开。后面的 chunk 集合、索引和 trace 都会绑定到它。</p>
               </div>
 
               <div className="lab-actions">
@@ -1031,7 +1330,119 @@ export default function App() {
               {renderDocumentSection("已保存文档", documentCatalog.saved)}
             </section>
 
-            <section className="lab-panel">
+            <form id="guide-preview" className="lab-panel" onSubmit={handleSubmit}>
+              <div className="lab-result__header">
+                <div>
+                  <p className="eyebrow">Editor</p>
+                  <h3>编辑当前文档并生成 preview</h3>
+                </div>
+                <span className={`status-pill status-pill--${documentSaveStatus === "error" ? "fallback" : "online"}`}>
+                  {documentSaveStatus}
+                </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 02</span>
+                <p>这里负责输入文本和参数。重点不是“填表”，而是反复改参数，看右侧 preview 怎么变化。</p>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="title">文档标题</label>
+                <input
+                  id="title"
+                  value={previewRequest.title}
+                  onChange={(event) => updateRequest("title", event.target.value)}
+                  maxLength={120}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-field">
+                  <label htmlFor="sourceType">文档类型</label>
+                  <select
+                    id="sourceType"
+                    value={previewRequest.sourceType}
+                    onChange={(event) => updateRequest("sourceType", event.target.value as "txt" | "md")}
+                  >
+                    <option value="md">Markdown</option>
+                    <option value="txt">Plain text</option>
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="fileInput">导入文件</label>
+                  <input
+                    id="fileInput"
+                    type="file"
+                    accept=".md,.txt,text/markdown,text/plain"
+                    onChange={handleFileChange}
+                  />
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="content">文档内容</label>
+                <textarea
+                  id="content"
+                  value={previewRequest.content}
+                  onChange={(event) => updateRequest("content", event.target.value)}
+                  rows={15}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-field">
+                  <label htmlFor="chunkSize">Chunk size</label>
+                  <input
+                    id="chunkSize"
+                    type="number"
+                    min={120}
+                    max={1200}
+                    step={20}
+                    value={previewRequest.chunkSize}
+                    onChange={(event) => updateRequest("chunkSize", Number(event.target.value))}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="chunkOverlap">Chunk overlap</label>
+                  <input
+                    id="chunkOverlap"
+                    type="number"
+                    min={0}
+                    max={400}
+                    step={10}
+                    value={previewRequest.chunkOverlap}
+                    onChange={(event) => updateRequest("chunkOverlap", Number(event.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="lab-actions">
+                <button className="primary-button" type="submit" disabled={previewStatus === "loading"}>
+                  {previewStatus === "loading" ? "生成中..." : "生成切块预览"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={documentSaveStatus === "loading"}
+                  onClick={() => void handleSaveDocument()}
+                >
+                  {documentSaveStatus === "loading" ? "保存中..." : "保存当前文档"}
+                </button>
+              </div>
+
+              <div className="panel-observation">
+                <strong>建议测试</strong>
+                <p>先保持 280 / 60 生成一次，再改成 160 / 20。你会马上看到右侧 chunk 数量增多、边界更碎。</p>
+              </div>
+
+              {documentSaveMessage ? (
+                <p className={documentSaveStatus === "error" ? "error-text" : "helper-text"}>{documentSaveMessage}</p>
+              ) : null}
+            </form>
+
+            <section id="guide-chunk-set" className={`lab-panel ${!previewResult ? "lab-panel--locked" : ""}`}>
               <div className="lab-result__header">
                 <div>
                   <p className="eyebrow">Document chunk sets</p>
@@ -1040,6 +1451,11 @@ export default function App() {
                 <span className={`status-pill status-pill--${chunkSetCatalogStatus === "error" ? "fallback" : "online"}`}>
                   {chunkSetCatalogStatus}
                 </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 03A</span>
+                <p>这一区块是稳定资产层。只有你确认某组 chunk 值得长期比较时，才把它保存成文档级集合。</p>
               </div>
 
               <div className="lab-actions">
@@ -1134,7 +1550,7 @@ export default function App() {
               ) : null}
             </section>
 
-            <section className="lab-panel">
+            <section className="lab-panel lab-panel--optional">
               <div className="lab-result__header">
                 <div>
                   <p className="eyebrow">Chunk history</p>
@@ -1143,6 +1559,11 @@ export default function App() {
                 <span className={`status-pill status-pill--${runCatalogStatus === "error" ? "fallback" : "online"}`}>
                   {runCatalogStatus}
                 </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 03B</span>
+                <p>历史记录更偏向“实验日志”。它适合保存一次尝试，方便你后面重新载入参数对比。</p>
               </div>
 
               <div className="lab-actions">
@@ -1184,7 +1605,7 @@ export default function App() {
               )}
             </section>
 
-            <section className="lab-panel">
+            <section id="guide-index" className={`lab-panel ${!selectedChunkSetId ? "lab-panel--locked" : ""}`}>
               <div className="lab-result__header">
                 <div>
                   <p className="eyebrow">Index builds</p>
@@ -1193,6 +1614,11 @@ export default function App() {
                 <span className={`status-pill status-pill--${indexBuildCatalogStatus === "error" ? "fallback" : "online"}`}>
                   {indexBuildCatalogStatus}
                 </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 04</span>
+                <p>选中 chunk 集合后，就可以把这组文本转换成可检索的向量快照。没有这一步，query 还无从比较。</p>
               </div>
 
               <div className="lab-actions">
@@ -1313,7 +1739,12 @@ export default function App() {
                   </p>
                   <p className="helper-text">高频词快照：{selectedIndexBuild.topTerms.join(" / ") || "暂无"}</p>
 
-                  <div className="chunk-set-editor">
+                  <div id="guide-search" className="chunk-set-editor">
+                    <div className="panel-stage panel-stage--inline">
+                      <span className="panel-stage__step">Step 05</span>
+                      <p>在同一份索引上连续改 query、topK 和 threshold，最容易看清“召回为什么变了”。</p>
+                    </div>
+
                     <div className="form-field">
                       <label htmlFor="searchQuery">Query</label>
                       <textarea
@@ -1420,7 +1851,7 @@ export default function App() {
               ) : null}
             </section>
 
-            <section className="lab-panel">
+            <section id="guide-trace" className={`lab-panel ${!selectedIndexBuildId ? "lab-panel--locked" : ""}`}>
               <div className="lab-result__header">
                 <div>
                   <p className="eyebrow">Retrieval traces</p>
@@ -1429,6 +1860,11 @@ export default function App() {
                 <span className={`status-pill status-pill--${retrievalTraceCatalogStatus === "error" ? "fallback" : "online"}`}>
                   {retrievalTraceCatalogStatus}
                 </span>
+              </div>
+
+              <div className="panel-stage">
+                <span className="panel-stage__step">Step 06</span>
+                <p>当你开始比较不同 query 或不同阈值时，把它们保存成 trace，后面就能回放和复盘。</p>
               </div>
 
               <div className="lab-actions">
@@ -1483,118 +1919,22 @@ export default function App() {
               )}
             </section>
 
-            <form className="lab-panel" onSubmit={handleSubmit}>
-              <div className="lab-result__header">
-                <div>
-                  <p className="eyebrow">Editor</p>
-                  <h3>编辑当前文档</h3>
-                </div>
-                <span className={`status-pill status-pill--${documentSaveStatus === "error" ? "fallback" : "online"}`}>
-                  {documentSaveStatus}
-                </span>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="title">文档标题</label>
-                <input
-                  id="title"
-                  value={previewRequest.title}
-                  onChange={(event) => updateRequest("title", event.target.value)}
-                  maxLength={120}
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-field">
-                  <label htmlFor="sourceType">文档类型</label>
-                  <select
-                    id="sourceType"
-                    value={previewRequest.sourceType}
-                    onChange={(event) => updateRequest("sourceType", event.target.value as "txt" | "md")}
-                  >
-                    <option value="md">Markdown</option>
-                    <option value="txt">Plain text</option>
-                  </select>
-                </div>
-
-                <div className="form-field">
-                  <label htmlFor="fileInput">导入文件</label>
-                  <input
-                    id="fileInput"
-                    type="file"
-                    accept=".md,.txt,text/markdown,text/plain"
-                    onChange={handleFileChange}
-                  />
-                </div>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="content">文档内容</label>
-                <textarea
-                  id="content"
-                  value={previewRequest.content}
-                  onChange={(event) => updateRequest("content", event.target.value)}
-                  rows={15}
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-field">
-                  <label htmlFor="chunkSize">Chunk size</label>
-                  <input
-                    id="chunkSize"
-                    type="number"
-                    min={120}
-                    max={1200}
-                    step={20}
-                    value={previewRequest.chunkSize}
-                    onChange={(event) => updateRequest("chunkSize", Number(event.target.value))}
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label htmlFor="chunkOverlap">Chunk overlap</label>
-                  <input
-                    id="chunkOverlap"
-                    type="number"
-                    min={0}
-                    max={400}
-                    step={10}
-                    value={previewRequest.chunkOverlap}
-                    onChange={(event) => updateRequest("chunkOverlap", Number(event.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div className="lab-actions">
-                <button className="primary-button" type="submit" disabled={previewStatus === "loading"}>
-                  {previewStatus === "loading" ? "生成中..." : "生成切块预览"}
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={documentSaveStatus === "loading"}
-                  onClick={() => void handleSaveDocument()}
-                >
-                  {documentSaveStatus === "loading" ? "保存中..." : "保存当前文档"}
-                </button>
-              </div>
-
-              {documentSaveMessage ? (
-                <p className={documentSaveStatus === "error" ? "error-text" : "helper-text"}>{documentSaveMessage}</p>
-              ) : null}
-            </form>
           </div>
 
-          <section className="lab-panel lab-panel--result">
+          <section id="guide-results" className="lab-panel lab-panel--result lab-panel--sticky">
             <div className="lab-result__header">
               <div>
                 <p className="eyebrow">Preview</p>
-                <h3>切块结果</h3>
+                <h3>切块结果与即时反馈</h3>
               </div>
               <span className={`status-pill status-pill--${previewStatus === "error" ? "fallback" : "online"}`}>
                 {previewStatus}
               </span>
+            </div>
+
+            <div className="panel-stage">
+              <span className="panel-stage__step">Step 03</span>
+              <p>右侧是你每次改参数之后最该看的地方。先看 chunk 数量和边界，再决定是否保存成历史或稳定集合。</p>
             </div>
 
             <div className="lab-actions">
@@ -1614,6 +1954,11 @@ export default function App() {
               >
                 {chunkSetSaveStatus === "loading" ? "保存中..." : "保存为文档级 chunk 集合"}
               </button>
+            </div>
+
+            <div className="panel-observation">
+              <strong>建议观察</strong>
+              <p>如果 chunk 更碎，通常会出现更多更短的结果；如果 overlap 更高，相邻 chunk 的上下文连续性会更强。</p>
             </div>
 
             <p className="helper-text">
