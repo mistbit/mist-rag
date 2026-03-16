@@ -490,13 +490,56 @@ dd {
 }
 
 .compare-grid,
-.compare-result-list {
+.compare-result-list,
+.compare-conclusions {
   display: grid;
   gap: 14px;
 }
 
 .compare-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compare-conclusions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compare-conclusion-card {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow-soft);
+}
+
+.compare-conclusion-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.compare-conclusion-card strong {
+  font-family: "Fraunces", "Noto Sans SC", serif;
+  font-size: 1.2rem;
+}
+
+.compare-conclusion-card p {
+  margin: 0;
+  color: var(--text);
+}
+
+.compare-conclusion-card--focus {
+  background: linear-gradient(180deg, rgba(255, 243, 230, 0.96), rgba(248, 230, 212, 0.84));
+}
+
+.compare-conclusion-card--steady {
+  background: linear-gradient(180deg, rgba(250, 247, 241, 0.96), rgba(240, 233, 224, 0.84));
+}
+
+.compare-conclusion-card--caution {
+  background: linear-gradient(180deg, rgba(255, 239, 234, 0.96), rgba(249, 220, 214, 0.84));
 }
 
 .compare-rank-board {
@@ -1211,6 +1254,7 @@ dd {
   .guide-board__hero,
   .guide-inspector,
   .compare-grid,
+  .compare-conclusions,
   .compare-rank-row__grid,
   .lab__grid,
   .section--split {

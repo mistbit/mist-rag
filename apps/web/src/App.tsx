@@ -156,6 +156,15 @@ type RankComparisonRow = {
   sameChunk: boolean;
 };
 
+type ComparisonConclusionTone = "focus" | "steady" | "caution";
+
+type ComparisonConclusionCard = {
+  label: string;
+  title: string;
+  body: string;
+  tone: ComparisonConclusionTone;
+};
+
 type SegmentedTextPart = {
   text: string;
   normalized: string | null;
@@ -1362,6 +1371,7 @@ export default function App() {
   const sameRankChunkCount = rankComparisonRows.filter((row) => row.sameChunk).length;
   const comparisonInsightA = getComparisonInsight("A");
   const comparisonInsightB = getComparisonInsight("B");
+  const comparisonConclusionCards = buildComparisonConclusionCards();
 
   useEffect(() => {
     const activeStep = guideSteps.find((step) => step.id === activeGuideStepId);
@@ -1570,6 +1580,150 @@ export default function App() {
         <pre>{insight ? renderHighlightedComparisonText(result.text, slotId, insight) : result.text}</pre>
       </article>
     );
+  }
+
+  function buildComparisonConclusionCards(): ComparisonConclusionCard[] {
+    if (!comparisonPairReady) {
+      return [
+        {
+          label: "结论 01",
+          title: "先固定两次实验，再生成结论",
+          body: "把当前状态固定到 A，再改参数固定到 B。结论卡会基于这两个快照自动总结 chunk 和检索差异。",
+          tone: "steady",
+        },
+      ];
+    }
+
+    const slotA = comparisonSlots.A;
+    const slotB = comparisonSlots.B;
+
+    if (!slotA || !slotB) {
+      return [];
+    }
+
+    const cards: ComparisonConclusionCard[] = [];
+    const overlapDelta = slotB.chunkOverlap - slotA.chunkOverlap;
+    const chunkMode =
+      slotB.chunkSize < slotA.chunkSize || (chunkDelta ?? 0) > 0
+        ? {
+            title: "B 把文档切得更细",
+            body: `chunk size 从 ${slotA.chunkSize} 调到 ${slotB.chunkSize}，总 chunk 数 ${chunkDelta !== null ? `${chunkDelta > 0 ? "+" : ""}${chunkDelta}` : "无变化"}，更适合观察召回颗粒度变化。`,
+            tone: "focus" as ComparisonConclusionTone,
+          }
+        : slotB.chunkSize > slotA.chunkSize || (chunkDelta ?? 0) < 0
+          ? {
+              title: "B 保留了更长的上下文",
+              body: `chunk size 从 ${slotA.chunkSize} 调到 ${slotB.chunkSize}，总 chunk 数 ${chunkDelta !== null ? `${chunkDelta > 0 ? "+" : ""}${chunkDelta}` : "无变化"}，更容易让单条结果带更多原文语境。`,
+              tone: "steady" as ComparisonConclusionTone,
+            }
+          : {
+              title: "两次 chunk 切分基本稳定",
+              body: `chunk size 保持在 ${slotB.chunkSize}，overlap ${overlapDelta === 0 ? "没有变化" : `变化了 ${overlapDelta > 0 ? "+" : ""}${overlapDelta}` }，这次实验更偏向比较检索参数。`,
+              tone: "steady" as ComparisonConclusionTone,
+            };
+
+    cards.push({
+      label: "结论 01",
+      ...chunkMode,
+    });
+
+    if (!comparisonSearchPairReady || !slotA.search || !slotB.search) {
+      cards.push({
+        label: "结论 02",
+        title: "当前还只有 chunk 结论",
+        body: "A/B 还没有都跑过检索。下一步分别运行 query，再固定到两个槽位，这里就会补出召回与排序结论。",
+        tone: "steady",
+      });
+
+      return cards;
+    }
+
+    const topScoreDelta =
+      slotA.search.topScore !== null && slotB.search.topScore !== null ? slotB.search.topScore - slotA.search.topScore : null;
+    const thresholdDelta = slotB.search.scoreThreshold - slotA.search.scoreThreshold;
+    const topKDelta = slotB.search.topK - slotA.search.topK;
+
+    const retrievalCard: ComparisonConclusionCard =
+      searchDelta !== null && searchDelta < 0
+        ? {
+            label: "结论 02",
+            title: "B 把召回范围收紧了",
+            body: `结果数 ${searchDelta}，${thresholdDelta > 0 ? `threshold 提高了 ${thresholdDelta.toFixed(2)}` : topKDelta < 0 ? `topK 降到了 ${slotB.search.topK}` : "主要是当前参数让召回更窄"}。这类变化更适合做精度优先的实验。`,
+            tone: "caution",
+          }
+        : searchDelta !== null && searchDelta > 0
+          ? {
+              label: "结论 02",
+              title: "B 扩大了召回面",
+              body: `结果数 ${searchDelta > 0 ? `+${searchDelta}` : searchDelta}，${thresholdDelta < 0 ? `threshold 降低了 ${Math.abs(thresholdDelta).toFixed(2)}` : topKDelta > 0 ? `topK 提高到了 ${slotB.search.topK}` : "更多差异来自 chunk 粒度变化"}。这类变化更适合看 recall 是否更充分。`,
+              tone: "focus",
+            }
+          : sameRankChunkCount === rankComparisonRows.length
+            ? {
+                label: "结论 02",
+                title: "核心召回排序基本稳定",
+                body: `Rank 1-${rankComparisonRows.length} 仍命中同一组 chunk，说明这次参数调整没有改变主要证据来源。`,
+                tone: "steady",
+              }
+            : {
+                label: "结论 02",
+                title: "结果数量没变，但排序已经移动",
+                body: `A/B 都保留了 ${slotB.search.resultCount} 条结果，但只有 ${sameRankChunkCount}/${rankComparisonRows.length} 个 rank 仍命中同一 chunk，说明排序逻辑已经被本次改动扰动。`,
+                tone: "focus",
+              };
+
+    cards.push(retrievalCard);
+
+    cards.push(
+      topScoreDelta !== null && topScoreDelta > 0.04
+        ? {
+            label: "结论 03",
+            title: "B 的头部相关度更强",
+            body: `top score 提升了 ${topScoreDelta.toFixed(4)}，如果 Rank 1 文本也更贴近 query，这组参数更值得继续保存成 trace。`,
+            tone: "focus",
+          }
+        : topScoreDelta !== null && topScoreDelta < -0.04
+          ? {
+              label: "结论 03",
+              title: "B 的头部相关度变弱了",
+              body: `top score 下降了 ${Math.abs(topScoreDelta).toFixed(4)}，建议回看 rank compare，确认是不是因为 chunk 更碎或过滤更严导致最相关段落被换掉。`,
+              tone: "caution",
+            }
+          : {
+              label: "结论 03",
+              title: "顶部相关度差异不大",
+              body:
+                topScoreDelta === null
+                  ? "当前一侧没有足够结果来比较 top score。"
+                  : `top score 只变化了 ${Math.abs(topScoreDelta).toFixed(4)}，这次实验更值得关注命中文本内容和 rank 结构，而不是只看分数。`,
+              tone: "steady",
+            },
+    );
+
+    cards.push(
+      sameRankChunkCount === rankComparisonRows.length && Math.abs(topScoreDelta ?? 0) < 0.03
+        ? {
+            label: "下一步",
+            title: "继续放大差异",
+            body: "当前 A/B 变化还比较温和。下一轮更适合直接改 query 或 threshold，把差异放大到 retrieval trace 里再复盘。",
+            tone: "steady",
+          }
+        : searchDelta !== null && searchDelta < 0
+          ? {
+              label: "下一步",
+              title: "验证这是过滤效应还是切分效应",
+              body: "先保持 query 不变，回放两条 trace，再单独把 threshold 调回接近 A 的水平，确认结果变少到底来自过滤还是 chunk 参数。",
+              tone: "caution",
+            }
+          : {
+              label: "下一步",
+              title: "把结论固化成可回放实验",
+              body: "如果你已经看到 rank 换位或 top score 提升，下一步就把这两次检索都保存为 trace，后面可以直接回放这次参数差异。",
+              tone: "focus",
+            },
+    );
+
+    return cards;
   }
 
   function getGuideStepState(step: GuideStep) {
@@ -1924,6 +2078,16 @@ export default function App() {
             <strong>{comparisonSearchPairReady ? `${sameRankChunkCount}/${rankComparisonRows.length}` : "—"}</strong>
             <p>{comparisonSearchPairReady ? "相同名次下，两侧是否还命中同一条 chunk。" : "A/B 都运行检索后显示。"}</p>
           </article>
+        </div>
+
+        <div className="compare-conclusions">
+          {comparisonConclusionCards.map((card) => (
+            <article key={card.label} className={`compare-conclusion-card compare-conclusion-card--${card.tone}`}>
+              <span>{card.label}</span>
+              <strong>{card.title}</strong>
+              <p>{card.body}</p>
+            </article>
+          ))}
         </div>
 
         <div className="compare-grid">
