@@ -138,12 +138,22 @@ type ComparisonSnapshot = {
     | null;
 };
 
+type ComparisonSearchResult = SearchIndexBuildResponse["results"][number];
+
 type ComparisonTermInsight = {
   queryTerms: Set<string>;
   uniqueTerms: Set<string>;
   uniquePreview: string[];
   sharedPreview: string[];
   paired: boolean;
+};
+
+type RankComparisonRow = {
+  rank: number;
+  slotA: ComparisonSearchResult | null;
+  slotB: ComparisonSearchResult | null;
+  scoreDelta: number | null;
+  sameChunk: boolean;
 };
 
 type SegmentedTextPart = {
@@ -1322,12 +1332,36 @@ export default function App() {
   ];
   const comparisonReady = Boolean(previewResult);
   const comparisonPairReady = Boolean(comparisonSlots.A && comparisonSlots.B);
+  const comparisonSearchPairReady = Boolean(comparisonSlots.A?.search && comparisonSlots.B?.search);
   const chunkDelta =
     comparisonSlots.A && comparisonSlots.B ? comparisonSlots.B.totalChunks - comparisonSlots.A.totalChunks : null;
   const searchDelta =
     comparisonSlots.A?.search && comparisonSlots.B?.search
       ? comparisonSlots.B.search.resultCount - comparisonSlots.A.search.resultCount
       : null;
+  const rankComparisonRows: RankComparisonRow[] =
+    comparisonSlots.A?.search && comparisonSlots.B?.search
+      ? Array.from(
+          {
+            length: Math.max(comparisonSlots.A.search.topResults.length, comparisonSlots.B.search.topResults.length),
+          },
+          (_, index) => {
+            const slotA = comparisonSlots.A?.search?.topResults[index] ?? null;
+            const slotB = comparisonSlots.B?.search?.topResults[index] ?? null;
+
+            return {
+              rank: index + 1,
+              slotA,
+              slotB,
+              scoreDelta: slotA && slotB ? slotB.score - slotA.score : null,
+              sameChunk: Boolean(slotA && slotB && slotA.chunkId === slotB.chunkId),
+            };
+          },
+        )
+      : [];
+  const sameRankChunkCount = rankComparisonRows.filter((row) => row.sameChunk).length;
+  const comparisonInsightA = getComparisonInsight("A");
+  const comparisonInsightB = getComparisonInsight("B");
 
   useEffect(() => {
     const activeStep = guideSteps.find((step) => step.id === activeGuideStepId);
@@ -1412,7 +1446,7 @@ export default function App() {
             resultCount: searchResult.results.length,
             topScore: searchResult.results[0]?.score ?? null,
             queryTerms: searchResult.queryTerms,
-            topResults: searchResult.results.slice(0, 2),
+            topResults: searchResult.results.slice(0, 3),
           }
         : null,
     };
@@ -1508,6 +1542,34 @@ export default function App() {
         </mark>
       );
     });
+  }
+
+  function renderRankComparisonCell(slotId: ComparisonSlotId, result: ComparisonSearchResult | null, insight: ComparisonTermInsight | null) {
+    if (!result) {
+      return (
+        <article className={`compare-rank-card compare-rank-card--empty compare-rank-card--slot-${slotId.toLowerCase()}`}>
+          <div className="compare-rank-card__header">
+            <strong>Slot {slotId}</strong>
+            <span>no hit</span>
+          </div>
+          <p className="helper-text">这一侧在这个 rank 没有命中结果。</p>
+        </article>
+      );
+    }
+
+    return (
+      <article className={`compare-rank-card compare-rank-card--slot-${slotId.toLowerCase()}`}>
+        <div className="compare-rank-card__header">
+          <strong>Slot {slotId}</strong>
+          <span>{result.score.toFixed(4)}</span>
+          <span>{result.tokenCount} tokens</span>
+        </div>
+        <p className="helper-text">
+          chunk {result.chunkId} · offset {result.startOffset}-{result.endOffset}
+        </p>
+        <pre>{insight ? renderHighlightedComparisonText(result.text, slotId, insight) : result.text}</pre>
+      </article>
+    );
   }
 
   function getGuideStepState(step: GuideStep) {
@@ -1857,11 +1919,52 @@ export default function App() {
             <strong>{searchDelta === null ? "—" : `${searchDelta > 0 ? "+" : ""}${searchDelta}`}</strong>
             <p>{searchDelta === null ? "两边都运行检索后会显示结果数差异。" : "B 相比 A 的结果数变化。"}</p>
           </article>
+          <article className="compare-summary__card">
+            <span>同 rank 同 chunk</span>
+            <strong>{comparisonSearchPairReady ? `${sameRankChunkCount}/${rankComparisonRows.length}` : "—"}</strong>
+            <p>{comparisonSearchPairReady ? "相同名次下，两侧是否还命中同一条 chunk。" : "A/B 都运行检索后显示。"}</p>
+          </article>
         </div>
 
         <div className="compare-grid">
           {renderComparisonSlot("A")}
           {renderComparisonSlot("B")}
+        </div>
+
+        <div className={`compare-rank-board ${comparisonSearchPairReady ? "" : "compare-rank-board--empty"}`}>
+          <div className="compare-rank-board__header">
+            <div>
+              <p className="eyebrow">Rank compare</p>
+              <h3>按名次对齐，直接看命中是稳定还是换位</h3>
+            </div>
+            <p className="helper-text">这里会把 A/B 的高排名结果并排摆出来，方便比较同一 rank 下的文本、分数和 chunk 是否已经换掉。</p>
+          </div>
+
+          {comparisonSearchPairReady ? (
+            <div className="compare-rank-list">
+              {rankComparisonRows.map((row) => {
+                return (
+                  <article key={`rank-${row.rank}`} className="compare-rank-row">
+                    <div className="compare-rank-row__meta">
+                      <span>Rank {String(row.rank).padStart(2, "0")}</span>
+                      <strong>{row.sameChunk ? "命中稳定" : "命中换位"}</strong>
+                      <p>
+                        {row.scoreDelta === null
+                          ? "当前名次只有一侧有结果。"
+                          : `B 比 A ${row.scoreDelta >= 0 ? "高" : "低"} ${Math.abs(row.scoreDelta).toFixed(4)}。`}
+                      </p>
+                    </div>
+                    <div className="compare-rank-row__grid">
+                      {renderRankComparisonCell("A", row.slotA, comparisonInsightA)}
+                      {renderRankComparisonCell("B", row.slotB, comparisonInsightB)}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="helper-text">先让 A 和 B 都运行过检索，再固定到对照槽位，这里才会按 Rank 1-3 展开对齐比较。</p>
+          )}
         </div>
       </section>
 
