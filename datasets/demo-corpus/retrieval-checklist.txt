@@ -1,0 +1,8 @@
+Retrieval checklist:
+
+1. Verify that the query and documents are embedded with compatible models.
+2. Inspect whether the relevant chunk was indexed at all before tuning top-k.
+3. Compare raw similarity ranking and reranked ranking to see where relevance improves or regresses.
+4. Check whether metadata filters accidentally excluded the right document.
+5. Review the final prompt to confirm that the retrieved context really reached the model.
+

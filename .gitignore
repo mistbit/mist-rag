@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 *.egg-info/
 .run/
+services/api/storage/*.json

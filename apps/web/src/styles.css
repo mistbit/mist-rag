@@ -234,8 +234,14 @@ dd {
 
 .lab__grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   gap: 24px;
+}
+
+.lab__stack {
+  display: grid;
+  gap: 24px;
+  align-content: start;
 }
 
 .lab-panel {
@@ -300,6 +306,15 @@ dd {
   cursor: progress;
 }
 
+.secondary-button {
+  border: 1px solid rgba(31, 31, 25, 0.12);
+  border-radius: 999px;
+  padding: 11px 17px;
+  color: var(--text);
+  background: rgba(255, 251, 245, 0.9);
+  cursor: pointer;
+}
+
 .helper-text,
 .error-text {
   margin: 0;
@@ -348,6 +363,61 @@ dd {
   gap: 14px;
 }
 
+.document-section {
+  display: grid;
+  gap: 12px;
+}
+
+.document-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.document-section__header span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.document-list {
+  display: grid;
+  gap: 12px;
+}
+
+.document-card {
+  width: 100%;
+  border: 1px solid rgba(31, 31, 25, 0.1);
+  border-radius: 18px;
+  padding: 16px;
+  text-align: left;
+  background: rgba(255, 251, 245, 0.85);
+  cursor: pointer;
+}
+
+.document-card--active {
+  border-color: rgba(189, 83, 40, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(189, 83, 40, 0.18);
+}
+
+.document-card__meta,
+.document-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.document-card__meta span,
+.document-card__footer span,
+.document-card p {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.document-card p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
 .chunk-card {
   border-radius: 22px;
   background: rgba(255, 251, 245, 0.82);
@@ -375,6 +445,7 @@ dd {
   .section--split,
   .flow-grid,
   .lab__grid,
+  .lab__stack,
   .form-row,
   .stats-grid {
     grid-template-columns: 1fr;

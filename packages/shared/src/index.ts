@@ -32,10 +32,35 @@ export type DocumentRecord = {
   title: string;
   sourceType: DocumentSourceType;
   content: string;
+  origin: DocumentOrigin;
+  createdAt: string;
+  updatedAt: string;
   metadata: Record<string, string>;
 };
 
 export type DocumentSourceType = "txt" | "md" | "pdf";
+export type DocumentOrigin = "sample" | "saved";
+
+export type DocumentSummary = {
+  id: string;
+  title: string;
+  sourceType: Extract<DocumentSourceType, "txt" | "md">;
+  origin: DocumentOrigin;
+  excerpt: string;
+  charCount: number;
+  updatedAt: string;
+};
+
+export type DocumentCatalogResponse = {
+  samples: DocumentSummary[];
+  saved: DocumentSummary[];
+};
+
+export type SaveDocumentRequest = {
+  title: string;
+  sourceType: Extract<DocumentSourceType, "txt" | "md">;
+  content: string;
+};
 
 export type ChunkRecord = {
   id: string;

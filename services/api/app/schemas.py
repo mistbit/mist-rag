@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FlowNode(BaseModel):
@@ -36,6 +36,56 @@ class RagOverview(BaseModel):
     sprintOne: list[DeliveryMilestone]
 
 
+DocumentSourceType = Literal["txt", "md", "pdf"]
+EditableDocumentSourceType = Literal["txt", "md"]
+DocumentOrigin = Literal["sample", "saved"]
+
+
+class DocumentRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    source_type: DocumentSourceType = Field(alias="sourceType")
+    content: str
+    origin: DocumentOrigin
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+    metadata: dict[str, str]
+
+
+class DocumentSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    source_type: EditableDocumentSourceType = Field(alias="sourceType")
+    origin: DocumentOrigin
+    excerpt: str
+    char_count: int = Field(alias="charCount")
+    updated_at: str = Field(alias="updatedAt")
+
+
+class DocumentCatalogResponse(BaseModel):
+    samples: list[DocumentSummary]
+    saved: list[DocumentSummary]
+
+
+class SaveDocumentRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    source_type: EditableDocumentSourceType = Field(alias="sourceType")
+    content: str = Field(min_length=1)
+
+    @field_validator("content")
+    @classmethod
+    def validate_document_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Content must not be blank.")
+        return value
+
+
 class ChunkRecord(BaseModel):
     id: str
     documentId: str
@@ -49,7 +99,7 @@ class ChunkRecord(BaseModel):
 class PreviewDocument(BaseModel):
     id: str
     title: str
-    sourceType: Literal["txt", "md"]
+    sourceType: EditableDocumentSourceType
     charCount: int
 
 
@@ -61,8 +111,10 @@ class PreviewStats(BaseModel):
 
 
 class ChunkPreviewRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     title: str = Field(min_length=1, max_length=120)
-    source_type: Literal["txt", "md"] = Field(alias="sourceType")
+    source_type: EditableDocumentSourceType = Field(alias="sourceType")
     content: str = Field(min_length=1)
     chunk_size: int = Field(alias="chunkSize", ge=120, le=1200)
     chunk_overlap: int = Field(alias="chunkOverlap", ge=0, le=400)
