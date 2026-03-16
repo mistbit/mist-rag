@@ -71,6 +71,7 @@ type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
 type PreviewStatus = "idle" | "loading" | "success" | "error";
 type GuideStepId = "document" | "preview" | "results" | "index" | "search" | "trace";
+type LabPresetId = "balanced" | "fine-grained" | "strict-filter";
 
 type GuideStep = {
   id: GuideStepId;
@@ -84,6 +85,54 @@ type GuideStep = {
   ready: boolean;
   done: boolean;
 };
+
+type LabPreset = {
+  id: LabPresetId;
+  label: string;
+  summary: string;
+  chunkSize: number;
+  chunkOverlap: number;
+  query: string;
+  topK: number;
+  scoreThreshold: number;
+  expected: string;
+};
+
+const LAB_PRESETS: LabPreset[] = [
+  {
+    id: "balanced",
+    label: "教学平衡版",
+    summary: "先理解 chunk 边界和默认检索排序，适合作为第一轮学习入口。",
+    chunkSize: 280,
+    chunkOverlap: 60,
+    query: "什么样的 chunk 更适合检索？",
+    topK: 3,
+    scoreThreshold: 0,
+    expected: "通常会看到 chunk 数量适中，检索结果覆盖面比较平衡。",
+  },
+  {
+    id: "fine-grained",
+    label: "细粒度召回版",
+    summary: "压小 chunk 并降低 overlap，观察更碎的语义单元如何改变召回排序。",
+    chunkSize: 160,
+    chunkOverlap: 20,
+    query: "为什么 overlap 会影响上下文连续性？",
+    topK: 4,
+    scoreThreshold: 0.05,
+    expected: "chunk 数量会上升，结果更聚焦局部句子，但连续上下文会被切得更明显。",
+  },
+  {
+    id: "strict-filter",
+    label: "高精度过滤版",
+    summary: "保留更长 chunk 并提高阈值，学习过滤低分结果后会丢掉什么信息。",
+    chunkSize: 420,
+    chunkOverlap: 80,
+    query: "什么情况下 chunk 太大？",
+    topK: 2,
+    scoreThreshold: 0.25,
+    expected: "返回数量通常更少，但高分结果会更集中，也更容易看到被阈值过滤掉的长尾。",
+  },
+];
 
 export default function App() {
   const [overview, setOverview] = useState<RagOverview>(fallbackOverview as RagOverview);
@@ -133,6 +182,7 @@ export default function App() {
   const [retrievalTraceStatus, setRetrievalTraceStatus] = useState<AsyncStatus>("idle");
   const [retrievalTraceMessage, setRetrievalTraceMessage] = useState("");
   const [activeGuideStepId, setActiveGuideStepId] = useState<GuideStepId>("document");
+  const [selectedPresetId, setSelectedPresetId] = useState<LabPresetId | null>("balanced");
 
   useEffect(() => {
     let cancelled = false;
@@ -265,16 +315,20 @@ export default function App() {
     }
   }
 
-  function clearDocumentChunkSets() {
-    setChunkSetCatalog(EMPTY_CHUNK_SET_CATALOG);
-    setChunkSetCatalogStatus("idle");
-    setChunkSetCatalogError("");
+  function clearSelectedChunkSetContext() {
     setSelectedChunkSetId(null);
     setChunkSetSaveStatus("idle");
     setChunkSetSaveMessage("");
     setChunkSetLabelDraft("");
     setChunkSetNotesDraft("");
     clearIndexBuilds();
+  }
+
+  function clearDocumentChunkSets() {
+    setChunkSetCatalog(EMPTY_CHUNK_SET_CATALOG);
+    setChunkSetCatalogStatus("idle");
+    setChunkSetCatalogError("");
+    clearSelectedChunkSetContext();
   }
 
   function clearIndexBuilds() {
@@ -296,6 +350,15 @@ export default function App() {
     setRetrievalTraceCatalogStatus("idle");
     setRetrievalTraceCatalogError("");
     setSelectedTraceId(null);
+    setRetrievalTraceStatus("idle");
+    setRetrievalTraceMessage("");
+  }
+
+  function resetSearchDraftState() {
+    setSelectedTraceId(null);
+    setSearchStatus("idle");
+    setSearchMessage("");
+    setSearchResult(EMPTY_SEARCH_RESULT);
     setRetrievalTraceStatus("idle");
     setRetrievalTraceMessage("");
   }
@@ -327,18 +390,28 @@ export default function App() {
     }
   }
 
-  function resetSelections() {
-    setSelectedDocumentId(null);
+  function resetPreviewArtifacts() {
     setSelectedRunId(null);
-    setSelectedChunkSetId(null);
     setPreviewResult(null);
     setPreviewStatus("idle");
     setPreviewError("");
-    setDocumentSaveStatus("idle");
-    setDocumentSaveMessage("");
     setRunSaveStatus("idle");
     setRunSaveMessage("");
+    clearSelectedChunkSetContext();
+  }
+
+  function resetForEditedDocument() {
+    setSelectedDocumentId(null);
+    setDocumentSaveStatus("idle");
+    setDocumentSaveMessage("");
+    resetPreviewArtifacts();
     clearDocumentChunkSets();
+  }
+
+  function resetForParameterTuning() {
+    setDocumentSaveStatus("idle");
+    setDocumentSaveMessage("");
+    resetPreviewArtifacts();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -360,7 +433,8 @@ export default function App() {
 
     const content = await file.text();
     const sourceType = file.name.endsWith(".md") ? "md" : "txt";
-    resetSelections();
+    resetForEditedDocument();
+    setSelectedPresetId(null);
     setPreviewRequest((current) => ({
       ...current,
       title: file.name,
@@ -373,7 +447,14 @@ export default function App() {
   }
 
   function updateRequest<K extends keyof ChunkPreviewRequest>(key: K, value: ChunkPreviewRequest[K]) {
-    resetSelections();
+    if (key === "chunkSize" || key === "chunkOverlap") {
+      resetForParameterTuning();
+      setSelectedPresetId(null);
+    } else {
+      resetForEditedDocument();
+      setSelectedPresetId(null);
+    }
+
     setActiveGuideStepId("preview");
     setPreviewRequest((current) => ({
       ...current,
@@ -938,6 +1019,7 @@ export default function App() {
   const selectedIndexBuildSummary =
     indexBuildCatalog.builds.find((item) => item.id === selectedIndexBuildId) ?? selectedIndexBuild ?? null;
   const selectedTraceSummary = retrievalTraceCatalog.traces.find((item) => item.id === selectedTraceId) ?? null;
+  const selectedPreset = LAB_PRESETS.find((preset) => preset.id === selectedPresetId) ?? null;
   const hasPreviewResult = previewStatus === "success" && Boolean(previewResult);
   const hasSavedResultAsset =
     runCatalog.runs.length > 0 ||
@@ -1122,6 +1204,30 @@ export default function App() {
     });
   }
 
+  async function applyLabPreset(presetId: LabPresetId) {
+    const preset = LAB_PRESETS.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    resetForParameterTuning();
+    resetSearchDraftState();
+    setSelectedPresetId(preset.id);
+    setSearchQuery(preset.query);
+    setSearchTopK(preset.topK);
+    setSearchScoreThreshold(preset.scoreThreshold);
+
+    const nextRequest: ChunkPreviewRequest = {
+      ...previewRequest,
+      chunkSize: preset.chunkSize,
+      chunkOverlap: preset.chunkOverlap,
+    };
+
+    setPreviewRequest(nextRequest);
+    setActiveGuideStepId("preview");
+    await runPreview(nextRequest);
+  }
+
   function renderDocumentSection(title: string, items: DocumentCatalogResponse["samples"]) {
     return (
       <section className="document-section">
@@ -1232,6 +1338,9 @@ export default function App() {
               {completedGuideSteps}/{guideSteps.length}
             </strong>
             <p>{recommendedGuideStep.action}</p>
+            <p className="guide-brief__meta">
+              当前预设：{selectedPreset?.label ?? "自定义参数"}
+            </p>
             <button type="button" className="primary-button" onClick={() => focusGuideStep(recommendedGuideStep.id)}>
               跳到建议步骤
             </button>
@@ -1260,6 +1369,34 @@ export default function App() {
               </button>
             );
           })}
+        </div>
+
+        <div className="preset-grid">
+          {LAB_PRESETS.map((preset) => (
+            <article
+              key={preset.id}
+              className={`preset-card ${selectedPresetId === preset.id ? "preset-card--active" : ""}`}
+            >
+              <div className="preset-card__header">
+                <div>
+                  <span className="preset-card__eyebrow">Preset</span>
+                  <h3>{preset.label}</h3>
+                </div>
+                <span>
+                  {preset.chunkSize}/{preset.chunkOverlap}
+                </span>
+              </div>
+              <p>{preset.summary}</p>
+              <div className="preset-card__stats">
+                <span>topK {preset.topK}</span>
+                <span>threshold {preset.scoreThreshold.toFixed(2)}</span>
+              </div>
+              <p className="helper-text">{preset.expected}</p>
+              <button type="button" className="secondary-button" onClick={() => void applyLabPreset(preset.id)}>
+                应用这个场景
+              </button>
+            </article>
+          ))}
         </div>
 
         <div className="guide-inspector">
@@ -1753,7 +1890,11 @@ export default function App() {
                         rows={3}
                         maxLength={200}
                         value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
+                        onChange={(event) => {
+                          resetSearchDraftState();
+                          setSelectedPresetId(null);
+                          setSearchQuery(event.target.value);
+                        }}
                       />
                     </div>
 
@@ -1767,7 +1908,11 @@ export default function App() {
                           max={8}
                           step={1}
                           value={searchTopK}
-                          onChange={(event) => setSearchTopK(Number(event.target.value))}
+                          onChange={(event) => {
+                            resetSearchDraftState();
+                            setSelectedPresetId(null);
+                            setSearchTopK(Number(event.target.value));
+                          }}
                         />
                       </div>
 
@@ -1780,7 +1925,11 @@ export default function App() {
                           max={1}
                           step={0.05}
                           value={searchScoreThreshold}
-                          onChange={(event) => setSearchScoreThreshold(Number(event.target.value))}
+                          onChange={(event) => {
+                            resetSearchDraftState();
+                            setSelectedPresetId(null);
+                            setSearchScoreThreshold(Number(event.target.value));
+                          }}
                         />
                       </div>
                     </div>
