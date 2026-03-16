@@ -175,3 +175,45 @@ class ChunkRunRecord(BaseModel):
 
 class ChunkRunCatalogResponse(BaseModel):
     runs: list[ChunkRunSummary]
+
+
+class SaveDocumentChunkSetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    chunk_size: int = Field(alias="chunkSize", ge=120, le=1200)
+    chunk_overlap: int = Field(alias="chunkOverlap", ge=0, le=400)
+
+    @field_validator("chunk_overlap")
+    @classmethod
+    def validate_chunk_set_overlap(cls, value: int, info) -> int:
+        chunk_size = info.data.get("chunk_size")
+        if chunk_size is not None and value >= chunk_size:
+            raise ValueError("chunkOverlap must be smaller than chunkSize.")
+        return value
+
+
+class DocumentChunkSetSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    total_chunks: int = Field(alias="totalChunks")
+    chunk_size: int = Field(alias="chunkSize")
+    chunk_overlap: int = Field(alias="chunkOverlap")
+    created_at: str = Field(alias="createdAt")
+
+
+class DocumentChunkSetRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    created_at: str = Field(alias="createdAt")
+    preview_request: ChunkPreviewRequest = Field(alias="previewRequest")
+    preview_response: ChunkPreviewResponse = Field(alias="previewResponse")
+
+
+class DocumentChunkSetCatalogResponse(BaseModel):
+    sets: list[DocumentChunkSetSummary]

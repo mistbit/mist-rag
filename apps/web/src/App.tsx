@@ -6,6 +6,8 @@ import type {
   ChunkRunCatalogResponse,
   ChunkRunRecord,
   DocumentCatalogResponse,
+  DocumentChunkSetCatalogResponse,
+  DocumentChunkSetRecord,
   DocumentRecord,
   RagOverview,
 } from "@mist-rag/shared";
@@ -32,13 +34,17 @@ const DEFAULT_REQUEST: ChunkPreviewRequest = {
   chunkOverlap: 60,
 };
 
-const EMPTY_CATALOG: DocumentCatalogResponse = {
+const EMPTY_DOCUMENT_CATALOG: DocumentCatalogResponse = {
   samples: [],
   saved: [],
 };
 
 const EMPTY_RUN_CATALOG: ChunkRunCatalogResponse = {
   runs: [],
+};
+
+const EMPTY_CHUNK_SET_CATALOG: DocumentChunkSetCatalogResponse = {
+  sets: [],
 };
 
 type LoadStatus = "loading" | "online" | "fallback";
@@ -48,14 +54,18 @@ type PreviewStatus = "idle" | "loading" | "success" | "error";
 export default function App() {
   const [overview, setOverview] = useState<RagOverview>(fallbackOverview as RagOverview);
   const [overviewStatus, setOverviewStatus] = useState<LoadStatus>("loading");
-  const [documentCatalog, setDocumentCatalog] = useState<DocumentCatalogResponse>(EMPTY_CATALOG);
+  const [documentCatalog, setDocumentCatalog] = useState<DocumentCatalogResponse>(EMPTY_DOCUMENT_CATALOG);
   const [documentCatalogStatus, setDocumentCatalogStatus] = useState<AsyncStatus>("loading");
   const [documentCatalogError, setDocumentCatalogError] = useState("");
   const [runCatalog, setRunCatalog] = useState<ChunkRunCatalogResponse>(EMPTY_RUN_CATALOG);
   const [runCatalogStatus, setRunCatalogStatus] = useState<AsyncStatus>("loading");
   const [runCatalogError, setRunCatalogError] = useState("");
+  const [chunkSetCatalog, setChunkSetCatalog] = useState<DocumentChunkSetCatalogResponse>(EMPTY_CHUNK_SET_CATALOG);
+  const [chunkSetCatalogStatus, setChunkSetCatalogStatus] = useState<AsyncStatus>("idle");
+  const [chunkSetCatalogError, setChunkSetCatalogError] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedChunkSetId, setSelectedChunkSetId] = useState<string | null>(null);
   const [previewRequest, setPreviewRequest] = useState<ChunkPreviewRequest>(DEFAULT_REQUEST);
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
   const [previewError, setPreviewError] = useState("");
@@ -64,6 +74,8 @@ export default function App() {
   const [documentSaveMessage, setDocumentSaveMessage] = useState("");
   const [runSaveStatus, setRunSaveStatus] = useState<AsyncStatus>("idle");
   const [runSaveMessage, setRunSaveMessage] = useState("");
+  const [chunkSetSaveStatus, setChunkSetSaveStatus] = useState<AsyncStatus>("idle");
+  const [chunkSetSaveMessage, setChunkSetSaveMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +151,34 @@ export default function App() {
     }
   }
 
+  async function loadDocumentChunkSets(documentId: string) {
+    setChunkSetCatalogStatus("loading");
+    setChunkSetCatalogError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/chunk-sets`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const data = (await response.json()) as DocumentChunkSetCatalogResponse;
+      setChunkSetCatalog(data);
+      setChunkSetCatalogStatus("online");
+    } catch (error) {
+      setChunkSetCatalogStatus("error");
+      setChunkSetCatalogError(error instanceof Error ? error.message : "Unable to load document chunk sets.");
+    }
+  }
+
+  function clearDocumentChunkSets() {
+    setChunkSetCatalog(EMPTY_CHUNK_SET_CATALOG);
+    setChunkSetCatalogStatus("idle");
+    setChunkSetCatalogError("");
+    setSelectedChunkSetId(null);
+    setChunkSetSaveStatus("idle");
+    setChunkSetSaveMessage("");
+  }
+
   async function runPreview(request: ChunkPreviewRequest) {
     setPreviewStatus("loading");
     setPreviewError("");
@@ -169,6 +209,7 @@ export default function App() {
   function resetSelections() {
     setSelectedDocumentId(null);
     setSelectedRunId(null);
+    setSelectedChunkSetId(null);
     setPreviewResult(null);
     setPreviewStatus("idle");
     setPreviewError("");
@@ -176,11 +217,17 @@ export default function App() {
     setDocumentSaveMessage("");
     setRunSaveStatus("idle");
     setRunSaveMessage("");
+    clearDocumentChunkSets();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSelectedRunId(null);
+    setSelectedChunkSetId(null);
+    setRunSaveStatus("idle");
+    setRunSaveMessage("");
+    setChunkSetSaveStatus("idle");
+    setChunkSetSaveMessage("");
     await runPreview(previewRequest);
   }
 
@@ -229,10 +276,14 @@ export default function App() {
       setPreviewRequest(nextRequest);
       setSelectedDocumentId(document.id);
       setSelectedRunId(null);
+      setSelectedChunkSetId(null);
       setDocumentSaveStatus("idle");
       setDocumentSaveMessage(document.origin === "sample" ? "已载入样例文档。" : "已载入已保存文档。");
       setRunSaveStatus("idle");
       setRunSaveMessage("");
+      setChunkSetSaveStatus("idle");
+      setChunkSetSaveMessage("");
+      await loadDocumentChunkSets(document.id);
       await runPreview(nextRequest);
     } catch (error) {
       setDocumentSaveStatus("error");
@@ -250,15 +301,44 @@ export default function App() {
       const run = (await response.json()) as ChunkRunRecord;
       setSelectedRunId(run.id);
       setSelectedDocumentId(run.documentId ?? null);
+      setSelectedChunkSetId(null);
       setPreviewRequest(run.previewRequest);
       setPreviewResult(run.previewResponse);
       setPreviewStatus("success");
       setPreviewError("");
       setRunSaveStatus("saved");
       setRunSaveMessage("已载入历史切块记录。");
+      if (run.documentId) {
+        await loadDocumentChunkSets(run.documentId);
+      } else {
+        clearDocumentChunkSets();
+      }
     } catch (error) {
       setRunSaveStatus("error");
       setRunSaveMessage(error instanceof Error ? error.message : "Unable to load chunk run.");
+    }
+  }
+
+  async function handleDocumentChunkSetSelect(chunkSetId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chunk-sets/${chunkSetId}`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as DocumentChunkSetRecord;
+      setSelectedChunkSetId(record.id);
+      setSelectedDocumentId(record.documentId);
+      setSelectedRunId(null);
+      setPreviewRequest(record.previewRequest);
+      setPreviewResult(record.previewResponse);
+      setPreviewStatus("success");
+      setPreviewError("");
+      setChunkSetSaveStatus("saved");
+      setChunkSetSaveMessage("已载入文档级 chunk 集合。");
+    } catch (error) {
+      setChunkSetSaveStatus("error");
+      setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to load document chunk set.");
     }
   }
 
@@ -289,6 +369,7 @@ export default function App() {
       setDocumentSaveStatus("saved");
       setDocumentSaveMessage(`已保存为 ${document.title}`);
       await loadDocumentCatalog();
+      await loadDocumentChunkSets(document.id);
     } catch (error) {
       setDocumentSaveStatus("error");
       setDocumentSaveMessage(error instanceof Error ? error.message : "Unable to save document.");
@@ -315,6 +396,7 @@ export default function App() {
 
       if (selectedDocumentId === documentId) {
         setSelectedDocumentId(null);
+        clearDocumentChunkSets();
       }
 
       setDocumentSaveStatus("saved");
@@ -394,6 +476,45 @@ export default function App() {
     }
   }
 
+  async function handleSaveDocumentChunkSet() {
+    if (!previewResult || !selectedDocumentId) {
+      return;
+    }
+
+    setChunkSetSaveStatus("loading");
+    setChunkSetSaveMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/documents/${selectedDocumentId}/chunk-sets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chunkSize: previewRequest.chunkSize,
+          chunkOverlap: previewRequest.chunkOverlap,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as DocumentChunkSetRecord;
+      setSelectedChunkSetId(record.id);
+      setChunkSetSaveStatus("saved");
+      setChunkSetSaveMessage(`已为文档保存 chunk 集合 ${record.id}`);
+      setPreviewRequest(record.previewRequest);
+      setPreviewResult(record.previewResponse);
+      setPreviewStatus("success");
+      await loadDocumentChunkSets(record.documentId);
+    } catch (error) {
+      setChunkSetSaveStatus("error");
+      setChunkSetSaveMessage(error instanceof Error ? error.message : "Unable to save document chunk set.");
+    }
+  }
+
   function renderDocumentSection(title: string, items: DocumentCatalogResponse["samples"]) {
     return (
       <section className="document-section">
@@ -420,11 +541,7 @@ export default function App() {
                 </button>
                 {item.origin === "saved" ? (
                   <div className="document-card__actions">
-                    <button
-                      type="button"
-                      className="danger-button"
-                      onClick={() => void handleDeleteDocument(item.id, item.title)}
-                    >
+                    <button type="button" className="danger-button" onClick={() => void handleDeleteDocument(item.id, item.title)}>
                       删除
                     </button>
                   </div>
@@ -448,7 +565,7 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 2.5 / Chunk history</p>
+          <p className="eyebrow">Sprint 3.5 / Document chunk sets</p>
           <h1>{overview.hero.title}</h1>
           <p className="hero__subtitle">{overview.hero.subtitle}</p>
         </div>
@@ -456,9 +573,9 @@ export default function App() {
         <div className="hero__panel">
           <h2>当前交付边界</h2>
           <ul>
-            <li>保留学习首页、文档库和切块预览实验区</li>
-            <li>新增切块历史记录的保存与回看</li>
-            <li>同一页里可以在文档、参数和历史记录之间来回切换</li>
+            <li>保留学习首页、文档库、preview 与 chunk 历史</li>
+            <li>新增文档级 chunk 集合，把切块结果真正绑定到文档</li>
+            <li>同一页里可以在文档、文档级集合和历史记录之间切换</li>
           </ul>
         </div>
       </section>
@@ -494,7 +611,7 @@ export default function App() {
       <section className="section lab">
         <div className="section__heading">
           <p className="eyebrow">Ingest lab</p>
-          <h2>文档、preview 和历史回看形成一个实验闭环</h2>
+          <h2>文档、preview、历史与文档级 chunk 集合形成第二层闭环</h2>
         </div>
 
         <div className="lab__grid">
@@ -525,6 +642,67 @@ export default function App() {
             <section className="lab-panel">
               <div className="lab-result__header">
                 <div>
+                  <p className="eyebrow">Document chunk sets</p>
+                  <h3>当前文档的持久化 chunk 集合</h3>
+                </div>
+                <span className={`status-pill status-pill--${chunkSetCatalogStatus === "error" ? "fallback" : "online"}`}>
+                  {chunkSetCatalogStatus}
+                </span>
+              </div>
+
+              <div className="lab-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!selectedDocumentId}
+                  onClick={() => (selectedDocumentId ? void loadDocumentChunkSets(selectedDocumentId) : undefined)}
+                >
+                  刷新集合
+                </button>
+                <p className="helper-text">
+                  {selectedDocumentId
+                    ? "这里保存的是当前文档在特定 chunk 参数下的持久化切块结果。"
+                    : "先从左侧载入一个样例或已保存文档，再保存文档级 chunk 集合。"}
+                </p>
+              </div>
+
+              {chunkSetCatalogError ? <p className="error-text">{chunkSetCatalogError}</p> : null}
+
+              {chunkSetCatalog.sets.length === 0 ? (
+                <p className="helper-text">当前文档还没有保存过 chunk 集合。</p>
+              ) : (
+                <div className="document-list">
+                  {chunkSetCatalog.sets.map((record) => (
+                    <article
+                      key={record.id}
+                      className={`document-card ${selectedChunkSetId === record.id ? "document-card--active" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="document-card__content"
+                        onClick={() => void handleDocumentChunkSetSelect(record.id)}
+                      >
+                        <div className="document-card__meta">
+                          <strong>{record.documentTitle}</strong>
+                          <span>{record.totalChunks} chunks</span>
+                        </div>
+                        <p>
+                          chunkSize {record.chunkSize} / overlap {record.chunkOverlap}
+                        </p>
+                        <div className="document-card__footer">
+                          <span>{record.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                          <span>{record.id}</span>
+                        </div>
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="lab-panel">
+              <div className="lab-result__header">
+                <div>
                   <p className="eyebrow">Chunk history</p>
                   <h3>已保存的切块记录</h3>
                 </div>
@@ -537,7 +715,7 @@ export default function App() {
                 <button type="button" className="secondary-button" onClick={() => void loadRunCatalog()}>
                   刷新历史
                 </button>
-                <p className="helper-text">历史记录会保存当时的文档标题、切块参数和完整 chunk 结果。</p>
+                <p className="helper-text">历史记录保留实验轨迹，文档级 chunk 集合则保留与文档绑定的稳定结果。</p>
               </div>
 
               {runCatalogError ? <p className="error-text">{runCatalogError}</p> : null}
@@ -562,11 +740,7 @@ export default function App() {
                         </div>
                       </button>
                       <div className="document-card__actions">
-                        <button
-                          type="button"
-                          className="danger-button"
-                          onClick={() => void handleDeleteRun(run.id, run.title)}
-                        >
+                        <button type="button" className="danger-button" onClick={() => void handleDeleteRun(run.id, run.title)}>
                           删除
                         </button>
                       </div>
@@ -699,10 +873,26 @@ export default function App() {
               >
                 {runSaveStatus === "loading" ? "保存中..." : "保存本次切块记录"}
               </button>
-              <p className="helper-text">保存后可从左侧历史列表重新载入当时的参数和结果。</p>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={!previewResult || !selectedDocumentId || chunkSetSaveStatus === "loading"}
+                onClick={() => void handleSaveDocumentChunkSet()}
+              >
+                {chunkSetSaveStatus === "loading" ? "保存中..." : "保存为文档级 chunk 集合"}
+              </button>
             </div>
 
+            <p className="helper-text">
+              {selectedDocumentId
+                ? "当前 preview 可以同时保存为实验历史，或保存为绑定当前文档的 chunk 集合。"
+                : "要保存为文档级 chunk 集合，先从左侧选一个样例/已保存文档，或先保存当前文档。"}
+            </p>
+
             {runSaveMessage ? <p className={runSaveStatus === "error" ? "error-text" : "helper-text"}>{runSaveMessage}</p> : null}
+            {chunkSetSaveMessage ? (
+              <p className={chunkSetSaveStatus === "error" ? "error-text" : "helper-text"}>{chunkSetSaveMessage}</p>
+            ) : null}
             {previewError ? <p className="error-text">{previewError}</p> : null}
 
             {previewResult ? (

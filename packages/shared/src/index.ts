@@ -153,3 +153,31 @@ export type ChunkRunRecord = {
 export type ChunkRunCatalogResponse = {
   runs: ChunkRunSummary[];
 };
+
+export type SaveDocumentChunkSetRequest = {
+  chunkSize: number;
+  chunkOverlap: number;
+};
+
+export type DocumentChunkSetSummary = {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  totalChunks: number;
+  chunkSize: number;
+  chunkOverlap: number;
+  createdAt: string;
+};
+
+export type DocumentChunkSetRecord = {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  createdAt: string;
+  previewRequest: ChunkPreviewRequest;
+  previewResponse: ChunkPreviewResponse;
+};
+
+export type DocumentChunkSetCatalogResponse = {
+  sets: DocumentChunkSetSummary[];
+};
