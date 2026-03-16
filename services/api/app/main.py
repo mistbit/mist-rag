@@ -5,6 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .chunking import generate_chunk_preview
 from .chunk_runs import delete_chunk_run, get_chunk_run, list_chunk_runs, save_chunk_run
+from .comparison_reports import (
+    delete_comparison_report,
+    get_comparison_report,
+    list_comparison_reports,
+    save_comparison_report,
+)
 from .content import load_overview
 from .document_chunks import (
     delete_document_chunk_set,
@@ -29,6 +35,8 @@ from .schemas import (
     ChunkRunRecord,
     ChunkPreviewRequest,
     ChunkPreviewResponse,
+    ComparisonReportCatalogResponse,
+    ComparisonReportRecord,
     CreateIndexBuildRequest,
     DocumentChunkSetCatalogResponse,
     DocumentChunkSetRecord,
@@ -40,6 +48,7 @@ from .schemas import (
     RetrievalTraceCatalogResponse,
     RetrievalTraceRecord,
     SaveDocumentChunkSetRequest,
+    SaveComparisonReportRequest,
     SaveChunkRunRequest,
     SaveDocumentRequest,
     SearchIndexBuildRequest,
@@ -74,6 +83,32 @@ def healthcheck() -> dict[str, str]:
 @app.get("/api/v1/overview", response_model=RagOverview)
 def get_overview() -> RagOverview:
     return load_overview()
+
+
+@app.get("/api/v1/comparison-reports", response_model=ComparisonReportCatalogResponse)
+def get_comparison_report_catalog() -> ComparisonReportCatalogResponse:
+    return list_comparison_reports()
+
+
+@app.get("/api/v1/comparison-reports/{report_id}", response_model=ComparisonReportRecord)
+def get_comparison_report_by_id(report_id: str) -> ComparisonReportRecord:
+    record = get_comparison_report(report_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Comparison report not found.")
+    return record
+
+
+@app.post("/api/v1/comparison-reports", response_model=ComparisonReportRecord)
+def create_comparison_report(payload: SaveComparisonReportRequest) -> ComparisonReportRecord:
+    return save_comparison_report(payload)
+
+
+@app.delete("/api/v1/comparison-reports/{report_id}")
+def remove_comparison_report(report_id: str) -> dict[str, str]:
+    deleted = delete_comparison_report(report_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Comparison report not found.")
+    return {"status": "deleted", "id": report_id}
 
 
 @app.get("/api/v1/documents", response_model=DocumentCatalogResponse)

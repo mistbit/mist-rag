@@ -392,3 +392,94 @@ class RetrievalTraceRecord(BaseModel):
 
 class RetrievalTraceCatalogResponse(BaseModel):
     traces: list[RetrievalTraceSummary]
+
+
+ComparisonSlotId = Literal["A", "B"]
+ComparisonConclusionTone = Literal["focus", "steady", "caution"]
+
+
+class ComparisonSnapshotSearch(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    query: str
+    top_k: int = Field(alias="topK")
+    score_threshold: float = Field(alias="scoreThreshold")
+    result_count: int = Field(alias="resultCount")
+    top_score: float | None = Field(default=None, alias="topScore")
+    query_terms: list[str] = Field(alias="queryTerms")
+    top_results: list[SearchResult] = Field(alias="topResults")
+
+
+class ComparisonSnapshot(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    slot_id: ComparisonSlotId = Field(alias="slotId")
+    captured_at: str = Field(alias="capturedAt")
+    document_title: str = Field(alias="documentTitle")
+    preset_label: str = Field(alias="presetLabel")
+    chunk_size: int = Field(alias="chunkSize")
+    chunk_overlap: int = Field(alias="chunkOverlap")
+    total_chunks: int = Field(alias="totalChunks")
+    average_chunk_length: int = Field(alias="averageChunkLength")
+    char_count: int = Field(alias="charCount")
+    chunk_set_label: str | None = Field(default=None, alias="chunkSetLabel")
+    embedding_model: str | None = Field(default=None, alias="embeddingModel")
+    vector_dimensions: int | None = Field(default=None, alias="vectorDimensions")
+    search: ComparisonSnapshotSearch | None = None
+
+
+class ComparisonConclusionCard(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    label: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=500)
+    tone: ComparisonConclusionTone
+
+
+class SaveComparisonReportRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    slot_a: ComparisonSnapshot = Field(alias="slotA")
+    slot_b: ComparisonSnapshot = Field(alias="slotB")
+    conclusions: list[ComparisonConclusionCard] = Field(min_length=1, max_length=6)
+
+    @field_validator("title")
+    @classmethod
+    def normalize_report_title(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("title must not be blank.")
+        return normalized
+
+
+class ComparisonReportSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    document_title: str = Field(alias="documentTitle")
+    created_at: str = Field(alias="createdAt")
+    has_search_pair: bool = Field(alias="hasSearchPair")
+    chunk_delta: int = Field(alias="chunkDelta")
+    search_delta: int | None = Field(default=None, alias="searchDelta")
+    stable_rank_count: int | None = Field(default=None, alias="stableRankCount")
+    compared_rank_count: int | None = Field(default=None, alias="comparedRankCount")
+    lead_conclusion: str = Field(alias="leadConclusion")
+
+
+class ComparisonReportRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    title: str
+    document_title: str = Field(alias="documentTitle")
+    created_at: str = Field(alias="createdAt")
+    slot_a: ComparisonSnapshot = Field(alias="slotA")
+    slot_b: ComparisonSnapshot = Field(alias="slotB")
+    conclusions: list[ComparisonConclusionCard]
+
+
+class ComparisonReportCatalogResponse(BaseModel):
+    reports: list[ComparisonReportSummary]

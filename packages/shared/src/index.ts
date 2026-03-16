@@ -308,3 +308,74 @@ export type RetrievalTraceRecord = {
 export type RetrievalTraceCatalogResponse = {
   traces: RetrievalTraceSummary[];
 };
+
+export type ComparisonSlotId = "A" | "B";
+
+export type ComparisonSnapshotSearch = {
+  query: string;
+  topK: number;
+  scoreThreshold: number;
+  resultCount: number;
+  topScore: number | null;
+  queryTerms: string[];
+  topResults: SearchResult[];
+};
+
+export type ComparisonSnapshot = {
+  slotId: ComparisonSlotId;
+  capturedAt: string;
+  documentTitle: string;
+  presetLabel: string;
+  chunkSize: number;
+  chunkOverlap: number;
+  totalChunks: number;
+  averageChunkLength: number;
+  charCount: number;
+  chunkSetLabel: string | null;
+  embeddingModel: string | null;
+  vectorDimensions: number | null;
+  search: ComparisonSnapshotSearch | null;
+};
+
+export type ComparisonConclusionTone = "focus" | "steady" | "caution";
+
+export type ComparisonConclusionCard = {
+  label: string;
+  title: string;
+  body: string;
+  tone: ComparisonConclusionTone;
+};
+
+export type SaveComparisonReportRequest = {
+  title: string;
+  slotA: ComparisonSnapshot;
+  slotB: ComparisonSnapshot;
+  conclusions: ComparisonConclusionCard[];
+};
+
+export type ComparisonReportSummary = {
+  id: string;
+  title: string;
+  documentTitle: string;
+  createdAt: string;
+  hasSearchPair: boolean;
+  chunkDelta: number;
+  searchDelta: number | null;
+  stableRankCount: number | null;
+  comparedRankCount: number | null;
+  leadConclusion: string;
+};
+
+export type ComparisonReportRecord = {
+  id: string;
+  title: string;
+  documentTitle: string;
+  createdAt: string;
+  slotA: ComparisonSnapshot;
+  slotB: ComparisonSnapshot;
+  conclusions: ComparisonConclusionCard[];
+};
+
+export type ComparisonReportCatalogResponse = {
+  reports: ComparisonReportSummary[];
+};

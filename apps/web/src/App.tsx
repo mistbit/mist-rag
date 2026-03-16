@@ -5,6 +5,12 @@ import type {
   ChunkPreviewResponse,
   ChunkRunCatalogResponse,
   ChunkRunRecord,
+  ComparisonConclusionCard,
+  ComparisonConclusionTone,
+  ComparisonReportCatalogResponse,
+  ComparisonReportRecord,
+  ComparisonSlotId,
+  ComparisonSnapshot,
   CreateIndexBuildRequest,
   DocumentCatalogResponse,
   DocumentChunkSetCatalogResponse,
@@ -15,6 +21,7 @@ import type {
   RagOverview,
   RetrievalTraceCatalogResponse,
   RetrievalTraceRecord,
+  SaveComparisonReportRequest,
   SearchIndexBuildResponse,
 } from "@mist-rag/shared";
 import fallbackOverview from "@mist-rag/data";
@@ -66,6 +73,9 @@ const EMPTY_SEARCH_RESULT: SearchIndexBuildResponse | null = null;
 const EMPTY_RETRIEVAL_TRACE_CATALOG: RetrievalTraceCatalogResponse = {
   traces: [],
 };
+const EMPTY_COMPARISON_REPORT_CATALOG: ComparisonReportCatalogResponse = {
+  reports: [],
+};
 const ROUTE_PATHS = {
   learn: "/learn",
   lab: "/lab",
@@ -77,7 +87,6 @@ type PreviewStatus = "idle" | "loading" | "success" | "error";
 type AppRoute = "learn" | "lab";
 type GuideStepId = "document" | "preview" | "results" | "index" | "search" | "trace";
 type LabPresetId = "balanced" | "fine-grained" | "strict-filter";
-type ComparisonSlotId = "A" | "B";
 
 function getRouteFromPathname(pathname: string): AppRoute {
   if (pathname === ROUTE_PATHS.lab) {
@@ -112,32 +121,6 @@ type LabPreset = {
   expected: string;
 };
 
-type ComparisonSnapshot = {
-  slotId: ComparisonSlotId;
-  capturedAt: string;
-  documentTitle: string;
-  presetLabel: string;
-  chunkSize: number;
-  chunkOverlap: number;
-  totalChunks: number;
-  averageChunkLength: number;
-  charCount: number;
-  chunkSetLabel: string | null;
-  embeddingModel: string | null;
-  vectorDimensions: number | null;
-  search:
-    | {
-        query: string;
-        topK: number;
-        scoreThreshold: number;
-        resultCount: number;
-        topScore: number | null;
-        queryTerms: string[];
-        topResults: SearchIndexBuildResponse["results"];
-      }
-    | null;
-};
-
 type ComparisonSearchResult = SearchIndexBuildResponse["results"][number];
 
 type ComparisonTermInsight = {
@@ -154,15 +137,6 @@ type RankComparisonRow = {
   slotB: ComparisonSearchResult | null;
   scoreDelta: number | null;
   sameChunk: boolean;
-};
-
-type ComparisonConclusionTone = "focus" | "steady" | "caution";
-
-type ComparisonConclusionCard = {
-  label: string;
-  title: string;
-  body: string;
-  tone: ComparisonConclusionTone;
 };
 
 type SegmentedTextPart = {
@@ -338,6 +312,15 @@ export default function App() {
   const [retrievalTraceCatalogError, setRetrievalTraceCatalogError] = useState("");
   const [retrievalTraceStatus, setRetrievalTraceStatus] = useState<AsyncStatus>("idle");
   const [retrievalTraceMessage, setRetrievalTraceMessage] = useState("");
+  const [comparisonReportCatalog, setComparisonReportCatalog] =
+    useState<ComparisonReportCatalogResponse>(EMPTY_COMPARISON_REPORT_CATALOG);
+  const [comparisonReportCatalogStatus, setComparisonReportCatalogStatus] = useState<AsyncStatus>("loading");
+  const [comparisonReportCatalogError, setComparisonReportCatalogError] = useState("");
+  const [comparisonReportStatus, setComparisonReportStatus] = useState<AsyncStatus>("idle");
+  const [comparisonReportMessage, setComparisonReportMessage] = useState("");
+  const [comparisonReportTitleDraft, setComparisonReportTitleDraft] = useState("");
+  const [selectedComparisonReportId, setSelectedComparisonReportId] = useState<string | null>(null);
+  const [selectedComparisonReport, setSelectedComparisonReport] = useState<ComparisonReportRecord | null>(null);
   const [activeGuideStepId, setActiveGuideStepId] = useState<GuideStepId>("document");
   const [selectedPresetId, setSelectedPresetId] = useState<LabPresetId | null>("balanced");
   const [activeRoute, setActiveRoute] = useState<AppRoute>(() => getRouteFromPathname(globalThis.location?.pathname ?? "/learn"));
@@ -401,6 +384,7 @@ export default function App() {
   useEffect(() => {
     void loadDocumentCatalog();
     void loadRunCatalog();
+    void loadComparisonReportCatalog();
     void runPreview(DEFAULT_REQUEST);
   }, []);
 
@@ -496,6 +480,25 @@ export default function App() {
     } catch (error) {
       setRetrievalTraceCatalogStatus("error");
       setRetrievalTraceCatalogError(error instanceof Error ? error.message : "Unable to load retrieval traces.");
+    }
+  }
+
+  async function loadComparisonReportCatalog() {
+    setComparisonReportCatalogStatus("loading");
+    setComparisonReportCatalogError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/comparison-reports`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const data = (await response.json()) as ComparisonReportCatalogResponse;
+      setComparisonReportCatalog(data);
+      setComparisonReportCatalogStatus("online");
+    } catch (error) {
+      setComparisonReportCatalogStatus("error");
+      setComparisonReportCatalogError(error instanceof Error ? error.message : "Unable to load comparison reports.");
     }
   }
 
@@ -1371,7 +1374,11 @@ export default function App() {
   const sameRankChunkCount = rankComparisonRows.filter((row) => row.sameChunk).length;
   const comparisonInsightA = getComparisonInsight("A");
   const comparisonInsightB = getComparisonInsight("B");
-  const comparisonConclusionCards = buildComparisonConclusionCards();
+  const liveComparisonConclusionCards = buildComparisonConclusionCards();
+  const comparisonConclusionCards = selectedComparisonReport?.conclusions ?? liveComparisonConclusionCards;
+  const suggestedComparisonReportTitle = buildComparisonReportTitle();
+  const selectedComparisonReportSummary =
+    comparisonReportCatalog.reports.find((report) => report.id === selectedComparisonReportId) ?? null;
 
   useEffect(() => {
     const activeStep = guideSteps.find((step) => step.id === activeGuideStepId);
@@ -1462,12 +1469,44 @@ export default function App() {
     };
   }
 
+  function resetSelectedComparisonReport() {
+    setSelectedComparisonReportId(null);
+    setSelectedComparisonReport(null);
+  }
+
+  function buildComparisonReportTitle() {
+    const slotA = comparisonSlots.A;
+    const slotB = comparisonSlots.B;
+
+    if (!slotA || !slotB) {
+      return "未命名对照实验";
+    }
+
+    return `${slotB.documentTitle} · ${slotA.chunkSize}/${slotA.chunkOverlap} vs ${slotB.chunkSize}/${slotB.chunkOverlap}`;
+  }
+
+  function buildComparisonReportPayload(): SaveComparisonReportRequest | null {
+    if (!comparisonSlots.A || !comparisonSlots.B) {
+      return null;
+    }
+
+    return {
+      title: comparisonReportTitleDraft.trim() || suggestedComparisonReportTitle,
+      slotA: comparisonSlots.A,
+      slotB: comparisonSlots.B,
+      conclusions: comparisonConclusionCards,
+    };
+  }
+
   function pinComparisonSlot(slotId: ComparisonSlotId) {
     const snapshot = buildComparisonSnapshot(slotId);
     if (!snapshot) {
       return;
     }
 
+    resetSelectedComparisonReport();
+    setComparisonReportStatus("idle");
+    setComparisonReportMessage("");
     setComparisonSlots((current) => ({
       ...current,
       [slotId]: snapshot,
@@ -1475,10 +1514,96 @@ export default function App() {
   }
 
   function clearComparisonSlot(slotId: ComparisonSlotId) {
+    resetSelectedComparisonReport();
+    setComparisonReportStatus("idle");
+    setComparisonReportMessage("");
     setComparisonSlots((current) => ({
       ...current,
       [slotId]: null,
     }));
+  }
+
+  async function handleSaveComparisonReport() {
+    const payload = buildComparisonReportPayload();
+    if (!payload) {
+      return;
+    }
+
+    setComparisonReportStatus("loading");
+    setComparisonReportMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/comparison-reports`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as ComparisonReportRecord;
+      setSelectedComparisonReportId(record.id);
+      setSelectedComparisonReport(record);
+      setComparisonReportTitleDraft(record.title);
+      setComparisonReportStatus("saved");
+      setComparisonReportMessage("已保存实验报告快照。");
+      await loadComparisonReportCatalog();
+    } catch (error) {
+      setComparisonReportStatus("error");
+      setComparisonReportMessage(error instanceof Error ? error.message : "Unable to save comparison report.");
+    }
+  }
+
+  async function handleComparisonReportSelect(reportId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/comparison-reports/${reportId}`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const record = (await response.json()) as ComparisonReportRecord;
+      setComparisonSlots({
+        A: record.slotA,
+        B: record.slotB,
+      });
+      setSelectedComparisonReportId(record.id);
+      setSelectedComparisonReport(record);
+      setComparisonReportTitleDraft(record.title);
+      setComparisonReportStatus("saved");
+      setComparisonReportMessage("已载入实验报告快照。");
+    } catch (error) {
+      setComparisonReportStatus("error");
+      setComparisonReportMessage(error instanceof Error ? error.message : "Unable to load comparison report.");
+    }
+  }
+
+  async function handleDeleteComparisonReport(reportId: string, title: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/comparison-reports/${reportId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      if (selectedComparisonReportId === reportId) {
+        resetSelectedComparisonReport();
+        setComparisonReportTitleDraft("");
+      }
+
+      setComparisonReportStatus("saved");
+      setComparisonReportMessage(`已删除实验报告「${title}」。`);
+      await loadComparisonReportCatalog();
+    } catch (error) {
+      setComparisonReportStatus("error");
+      setComparisonReportMessage(error instanceof Error ? error.message : "Unable to delete comparison report.");
+    }
   }
 
   function getComparisonInsight(slotId: ComparisonSlotId): ComparisonTermInsight | null {
@@ -2088,6 +2213,93 @@ export default function App() {
               <p>{card.body}</p>
             </article>
           ))}
+        </div>
+
+        <div className="compare-report-board">
+          <div className="compare-report-board__header">
+            <div>
+              <p className="eyebrow">Report snapshots</p>
+              <h3>把这次 A/B 实验保存成可回放报告</h3>
+            </div>
+            <span className={`status-pill status-pill--${comparisonReportCatalogStatus === "error" ? "fallback" : "online"}`}>
+              {comparisonReportCatalogStatus}
+            </span>
+          </div>
+
+          <div className="form-row">
+            <div className="form-field">
+              <label htmlFor="comparisonReportTitle">Report title</label>
+              <input
+                id="comparisonReportTitle"
+                value={comparisonReportTitleDraft}
+                maxLength={120}
+                placeholder={suggestedComparisonReportTitle}
+                onChange={(event) => setComparisonReportTitleDraft(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="lab-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!comparisonPairReady || comparisonReportStatus === "loading"}
+              onClick={() => void handleSaveComparisonReport()}
+            >
+              {comparisonReportStatus === "loading" ? "保存中..." : "保存实验报告"}
+            </button>
+            <button type="button" className="secondary-button" onClick={() => void loadComparisonReportCatalog()}>
+              刷新报告列表
+            </button>
+            <p className="helper-text">
+              {selectedComparisonReportSummary
+                ? `当前已载入：${selectedComparisonReportSummary.title}。`
+                : "保存后会固定当前 A/B 快照和结论，后面可以重新载入。"}
+            </p>
+          </div>
+
+          {comparisonReportCatalogError ? <p className="error-text">{comparisonReportCatalogError}</p> : null}
+          {comparisonReportMessage ? (
+            <p className={comparisonReportStatus === "error" ? "error-text" : "helper-text"}>{comparisonReportMessage}</p>
+          ) : null}
+
+          {comparisonReportCatalog.reports.length === 0 ? (
+            <p className="helper-text">当前还没有保存过实验报告。</p>
+          ) : (
+            <div className="document-list">
+              {comparisonReportCatalog.reports.map((report) => (
+                <article
+                  key={report.id}
+                  className={`document-card ${selectedComparisonReportId === report.id ? "document-card--active" : ""}`}
+                >
+                  <button type="button" className="document-card__content" onClick={() => void handleComparisonReportSelect(report.id)}>
+                    <div className="document-card__meta">
+                      <strong>{report.title}</strong>
+                      <span>{report.documentTitle}</span>
+                    </div>
+                    <p>{report.leadConclusion}</p>
+                    <div className="document-card__footer">
+                      <span>
+                        chunk Δ {report.chunkDelta > 0 ? `+${report.chunkDelta}` : report.chunkDelta}
+                        {report.searchDelta === null ? "" : ` / search Δ ${report.searchDelta > 0 ? `+${report.searchDelta}` : report.searchDelta}`}
+                      </span>
+                      <span>{report.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                    </div>
+                    {report.comparedRankCount !== null ? (
+                      <p className="helper-text">
+                        rank stable {report.stableRankCount}/{report.comparedRankCount}
+                      </p>
+                    ) : null}
+                  </button>
+                  <div className="document-card__actions">
+                    <button type="button" className="danger-button" onClick={() => void handleDeleteComparisonReport(report.id, report.title)}>
+                      删除
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="compare-grid">
