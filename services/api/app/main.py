@@ -17,6 +17,13 @@ from .document_chunks import (
 from .documents import delete_document, get_document, list_documents, save_document
 from .index_builds import create_index_build, delete_index_builds_for_chunk_set, get_index_build, list_index_builds
 from .retrieval import search_index_build
+from .retrieval_traces import (
+    delete_retrieval_trace,
+    delete_retrieval_traces_for_build,
+    get_retrieval_trace,
+    list_retrieval_traces,
+    save_retrieval_trace,
+)
 from .schemas import (
     ChunkRunCatalogResponse,
     ChunkRunRecord,
@@ -30,6 +37,8 @@ from .schemas import (
     IndexBuildCatalogResponse,
     IndexBuildRecord,
     RagOverview,
+    RetrievalTraceCatalogResponse,
+    RetrievalTraceRecord,
     SaveDocumentChunkSetRequest,
     SaveChunkRunRequest,
     SaveDocumentRequest,
@@ -102,9 +111,12 @@ def remove_document(document_id: str) -> dict[str, str]:
     deleted = delete_document(document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")
-    delete_document_chunk_sets_for_document(document_id)
     for chunk_set_id in chunk_set_ids:
+        build_ids = [summary.id for summary in list_index_builds(chunk_set_id).builds]
+        for build_id in build_ids:
+            delete_retrieval_traces_for_build(build_id)
         delete_index_builds_for_chunk_set(chunk_set_id)
+    delete_document_chunk_sets_for_document(document_id)
     return {"status": "deleted", "id": document_id}
 
 
@@ -153,11 +165,30 @@ def create_chunk_set_index_build(chunk_set_id: str, payload: CreateIndexBuildReq
     return record
 
 
+@app.get("/api/v1/index-builds/{build_id}/retrieval-traces", response_model=RetrievalTraceCatalogResponse)
+def get_index_build_traces(build_id: str) -> RetrievalTraceCatalogResponse:
+    record = get_index_build(build_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Index build not found.")
+    return list_retrieval_traces(build_id)
+
+
+@app.post("/api/v1/index-builds/{build_id}/retrieval-traces", response_model=RetrievalTraceRecord)
+def create_retrieval_trace(build_id: str, payload: SearchIndexBuildRequest) -> RetrievalTraceRecord:
+    record = save_retrieval_trace(build_id, payload)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Index build not found.")
+    return record
+
+
 @app.delete("/api/v1/chunk-sets/{chunk_set_id}")
 def remove_document_chunk_set(chunk_set_id: str) -> dict[str, str]:
+    build_ids = [summary.id for summary in list_index_builds(chunk_set_id).builds]
     deleted = delete_document_chunk_set(chunk_set_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document chunk set not found.")
+    for build_id in build_ids:
+        delete_retrieval_traces_for_build(build_id)
     delete_index_builds_for_chunk_set(chunk_set_id)
     return {"status": "deleted", "id": chunk_set_id}
 
@@ -184,6 +215,22 @@ def search_index(build_id: str, payload: SearchIndexBuildRequest) -> SearchIndex
     if response is None:
         raise HTTPException(status_code=404, detail="Index build not found.")
     return response
+
+
+@app.get("/api/v1/retrieval-traces/{trace_id}", response_model=RetrievalTraceRecord)
+def get_retrieval_trace_by_id(trace_id: str) -> RetrievalTraceRecord:
+    record = get_retrieval_trace(trace_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Retrieval trace not found.")
+    return record
+
+
+@app.delete("/api/v1/retrieval-traces/{trace_id}")
+def remove_retrieval_trace(trace_id: str) -> dict[str, str]:
+    deleted = delete_retrieval_trace(trace_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Retrieval trace not found.")
+    return {"status": "deleted", "id": trace_id}
 
 
 @app.post("/api/v1/chunk-runs", response_model=ChunkRunRecord)

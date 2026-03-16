@@ -13,6 +13,8 @@ import type {
   IndexBuildCatalogResponse,
   IndexBuildRecord,
   RagOverview,
+  RetrievalTraceCatalogResponse,
+  RetrievalTraceRecord,
   SearchIndexBuildResponse,
 } from "@mist-rag/shared";
 import fallbackOverview from "@mist-rag/data";
@@ -61,6 +63,9 @@ const DEFAULT_INDEX_BUILD_REQUEST: CreateIndexBuildRequest = {
 };
 
 const EMPTY_SEARCH_RESULT: SearchIndexBuildResponse | null = null;
+const EMPTY_RETRIEVAL_TRACE_CATALOG: RetrievalTraceCatalogResponse = {
+  traces: [],
+};
 
 type LoadStatus = "loading" | "online" | "fallback";
 type AsyncStatus = "idle" | "loading" | "online" | "saved" | "error";
@@ -85,6 +90,7 @@ export default function App() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedChunkSetId, setSelectedChunkSetId] = useState<string | null>(null);
   const [selectedIndexBuildId, setSelectedIndexBuildId] = useState<string | null>(null);
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [previewRequest, setPreviewRequest] = useState<ChunkPreviewRequest>(DEFAULT_REQUEST);
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
   const [previewError, setPreviewError] = useState("");
@@ -103,9 +109,15 @@ export default function App() {
   const [selectedIndexBuild, setSelectedIndexBuild] = useState<IndexBuildRecord | null>(null);
   const [searchQuery, setSearchQuery] = useState("什么样的 chunk 更适合检索？");
   const [searchTopK, setSearchTopK] = useState(3);
+  const [searchScoreThreshold, setSearchScoreThreshold] = useState(0);
   const [searchStatus, setSearchStatus] = useState<AsyncStatus>("idle");
   const [searchMessage, setSearchMessage] = useState("");
   const [searchResult, setSearchResult] = useState<SearchIndexBuildResponse | null>(EMPTY_SEARCH_RESULT);
+  const [retrievalTraceCatalog, setRetrievalTraceCatalog] = useState<RetrievalTraceCatalogResponse>(EMPTY_RETRIEVAL_TRACE_CATALOG);
+  const [retrievalTraceCatalogStatus, setRetrievalTraceCatalogStatus] = useState<AsyncStatus>("idle");
+  const [retrievalTraceCatalogError, setRetrievalTraceCatalogError] = useState("");
+  const [retrievalTraceStatus, setRetrievalTraceStatus] = useState<AsyncStatus>("idle");
+  const [retrievalTraceMessage, setRetrievalTraceMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +231,25 @@ export default function App() {
     }
   }
 
+  async function loadRetrievalTraceCatalog(buildId: string) {
+    setRetrievalTraceCatalogStatus("loading");
+    setRetrievalTraceCatalogError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/index-builds/${buildId}/retrieval-traces`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const data = (await response.json()) as RetrievalTraceCatalogResponse;
+      setRetrievalTraceCatalog(data);
+      setRetrievalTraceCatalogStatus("online");
+    } catch (error) {
+      setRetrievalTraceCatalogStatus("error");
+      setRetrievalTraceCatalogError(error instanceof Error ? error.message : "Unable to load retrieval traces.");
+    }
+  }
+
   function clearDocumentChunkSets() {
     setChunkSetCatalog(EMPTY_CHUNK_SET_CATALOG);
     setChunkSetCatalogStatus("idle");
@@ -242,6 +273,16 @@ export default function App() {
     setSearchStatus("idle");
     setSearchMessage("");
     setSearchResult(EMPTY_SEARCH_RESULT);
+    clearRetrievalTraces();
+  }
+
+  function clearRetrievalTraces() {
+    setRetrievalTraceCatalog(EMPTY_RETRIEVAL_TRACE_CATALOG);
+    setRetrievalTraceCatalogStatus("idle");
+    setRetrievalTraceCatalogError("");
+    setSelectedTraceId(null);
+    setRetrievalTraceStatus("idle");
+    setRetrievalTraceMessage("");
   }
 
   async function runPreview(request: ChunkPreviewRequest) {
@@ -426,6 +467,8 @@ export default function App() {
       setSearchStatus("idle");
       setSearchMessage("");
       setSearchResult(EMPTY_SEARCH_RESULT);
+      clearRetrievalTraces();
+      await loadRetrievalTraceCatalog(record.id);
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage("已载入索引构建记录。");
     } catch (error) {
@@ -717,6 +760,8 @@ export default function App() {
       setSearchStatus("idle");
       setSearchMessage("");
       setSearchResult(EMPTY_SEARCH_RESULT);
+      clearRetrievalTraces();
+      await loadRetrievalTraceCatalog(record.id);
       setIndexBuildActionStatus("saved");
       setIndexBuildActionMessage(`已构建索引 ${record.id}`);
       await loadIndexBuildCatalog(record.chunkSetId);
@@ -743,6 +788,7 @@ export default function App() {
         body: JSON.stringify({
           query: searchQuery,
           topK: searchTopK,
+          scoreThreshold: searchScoreThreshold,
         }),
       });
 
@@ -758,6 +804,103 @@ export default function App() {
     } catch (error) {
       setSearchStatus("error");
       setSearchMessage(error instanceof Error ? error.message : "Unable to search index build.");
+    }
+  }
+
+  async function handleSaveRetrievalTrace() {
+    if (!selectedIndexBuildId) {
+      return;
+    }
+
+    setRetrievalTraceStatus("loading");
+    setRetrievalTraceMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/index-builds/${selectedIndexBuildId}/retrieval-traces`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          topK: searchTopK,
+          scoreThreshold: searchScoreThreshold,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const trace = (await response.json()) as RetrievalTraceRecord;
+      setSelectedTraceId(trace.id);
+      setSearchResult(trace.searchResponse);
+      setRetrievalTraceStatus("saved");
+      setRetrievalTraceMessage(`已保存检索轨迹 ${trace.id}`);
+      await loadRetrievalTraceCatalog(trace.buildId);
+    } catch (error) {
+      setRetrievalTraceStatus("error");
+      setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to save retrieval trace.");
+    }
+  }
+
+  async function handleRetrievalTraceSelect(traceId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/retrieval-traces/${traceId}`);
+      if (!response.ok) {
+        throw new Error(`Unexpected status ${response.status}`);
+      }
+
+      const trace = (await response.json()) as RetrievalTraceRecord;
+      setSelectedTraceId(trace.id);
+      setSelectedIndexBuildId(trace.buildId);
+      setSearchQuery(trace.searchResponse.query);
+      setSearchTopK(trace.searchResponse.topK);
+      setSearchScoreThreshold(trace.searchResponse.scoreThreshold);
+      setSearchResult(trace.searchResponse);
+      setSearchStatus("saved");
+      setSearchMessage(`已载入检索轨迹 ${trace.id}`);
+      setRetrievalTraceStatus("saved");
+      setRetrievalTraceMessage("已载入检索轨迹。");
+    } catch (error) {
+      setRetrievalTraceStatus("error");
+      setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to load retrieval trace.");
+    }
+  }
+
+  async function handleDeleteRetrievalTrace(traceId: string, query: string) {
+    if (!window.confirm(`删除检索轨迹 "${query}"？此操作只会移除历史记录。`)) {
+      return;
+    }
+
+    setRetrievalTraceStatus("loading");
+    setRetrievalTraceMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/retrieval-traces/${traceId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      if (selectedTraceId === traceId) {
+        setSelectedTraceId(null);
+      }
+
+      setRetrievalTraceStatus("saved");
+      setRetrievalTraceMessage("已删除检索轨迹。");
+      if (selectedIndexBuildId) {
+        await loadRetrievalTraceCatalog(selectedIndexBuildId);
+      } else {
+        clearRetrievalTraces();
+      }
+    } catch (error) {
+      setRetrievalTraceStatus("error");
+      setRetrievalTraceMessage(error instanceof Error ? error.message : "Unable to delete retrieval trace.");
     }
   }
 
@@ -811,7 +954,7 @@ export default function App() {
                 ? "Using local dataset"
                 : "Loading"}
           </span>
-          <p className="eyebrow">Sprint 5 / Retrieval lab</p>
+          <p className="eyebrow">Sprint 6 / Retrieval traces</p>
           <h1>{overview.hero.title}</h1>
           <p className="hero__subtitle">{overview.hero.subtitle}</p>
         </div>
@@ -823,6 +966,7 @@ export default function App() {
             <li>文档级 chunk 集合继续作为稳定输入层</li>
             <li>索引记录继续承担 embedding/index 的实验骨架</li>
             <li>新增 top-k 检索实验，直接观察 query 与 chunk 的相似度排序</li>
+            <li>新增 retrieval trace history，保存 query、threshold 和结果回放</li>
             <li>同一页里可以在文档、chunk 集合、索引记录、检索结果和历史之间切换</li>
           </ul>
         </div>
@@ -859,7 +1003,7 @@ export default function App() {
       <section className="section lab">
         <div className="section__heading">
           <p className="eyebrow">Ingest lab</p>
-          <h2>文档、chunk 集合、索引与 top-k 检索形成第三层闭环</h2>
+          <h2>文档、chunk 集合、索引、检索与 trace 形成第三层闭环</h2>
         </div>
 
         <div className="lab__grid">
@@ -1195,6 +1339,19 @@ export default function App() {
                           onChange={(event) => setSearchTopK(Number(event.target.value))}
                         />
                       </div>
+
+                      <div className="form-field">
+                        <label htmlFor="searchScoreThreshold">Score threshold</label>
+                        <input
+                          id="searchScoreThreshold"
+                          type="number"
+                          min={-1}
+                          max={1}
+                          step={0.05}
+                          value={searchScoreThreshold}
+                          onChange={(event) => setSearchScoreThreshold(Number(event.target.value))}
+                        />
+                      </div>
                     </div>
 
                     <div className="lab-actions">
@@ -1206,10 +1363,21 @@ export default function App() {
                       >
                         {searchStatus === "loading" ? "检索中..." : "运行 top-k 检索"}
                       </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={retrievalTraceStatus === "loading"}
+                        onClick={() => void handleSaveRetrievalTrace()}
+                      >
+                        {retrievalTraceStatus === "loading" ? "保存中..." : "保存检索轨迹"}
+                      </button>
                       <p className="helper-text">当前 query 会用和索引相同的 `demo-hash` 语义骨架向量化，再与 chunk 向量做相似度排序。</p>
                     </div>
 
                     {searchMessage ? <p className={searchStatus === "error" ? "error-text" : "helper-text"}>{searchMessage}</p> : null}
+                    {retrievalTraceMessage ? (
+                      <p className={retrievalTraceStatus === "error" ? "error-text" : "helper-text"}>{retrievalTraceMessage}</p>
+                    ) : null}
                   </div>
 
                   <div className="vector-preview-list">
@@ -1230,7 +1398,8 @@ export default function App() {
                   {searchResult ? (
                     <div className="vector-preview-list">
                       <p className="helper-text">
-                        Query terms: {searchResult.queryTerms.join(" / ") || "暂无"}，当前返回 top {searchResult.topK}。
+                        Query terms: {searchResult.queryTerms.join(" / ") || "暂无"}，当前返回 top {searchResult.topK}，阈值{" "}
+                        {searchResult.scoreThreshold.toFixed(2)}。
                       </p>
                       {searchResult.results.map((result) => (
                         <article key={result.chunkId} className="chunk-card">
@@ -1249,6 +1418,69 @@ export default function App() {
                   ) : null}
                 </div>
               ) : null}
+            </section>
+
+            <section className="lab-panel">
+              <div className="lab-result__header">
+                <div>
+                  <p className="eyebrow">Retrieval traces</p>
+                  <h3>当前索引的检索轨迹</h3>
+                </div>
+                <span className={`status-pill status-pill--${retrievalTraceCatalogStatus === "error" ? "fallback" : "online"}`}>
+                  {retrievalTraceCatalogStatus}
+                </span>
+              </div>
+
+              <div className="lab-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!selectedIndexBuildId}
+                  onClick={() => (selectedIndexBuildId ? void loadRetrievalTraceCatalog(selectedIndexBuildId) : undefined)}
+                >
+                  刷新检索轨迹
+                </button>
+                <p className="helper-text">
+                  {selectedIndexBuildId
+                    ? "保存后的 trace 会固定记录 query、top-k、threshold 和返回结果，方便后续对比。"
+                    : "先选择一个 index build，再运行检索或保存检索轨迹。"}
+                </p>
+              </div>
+
+              {retrievalTraceCatalogError ? <p className="error-text">{retrievalTraceCatalogError}</p> : null}
+
+              {retrievalTraceCatalog.traces.length === 0 ? (
+                <p className="helper-text">当前索引还没有保存过检索轨迹。</p>
+              ) : (
+                <div className="document-list">
+                  {retrievalTraceCatalog.traces.map((trace) => (
+                    <article key={trace.id} className={`document-card ${selectedTraceId === trace.id ? "document-card--active" : ""}`}>
+                      <button type="button" className="document-card__content" onClick={() => void handleRetrievalTraceSelect(trace.id)}>
+                        <div className="document-card__meta">
+                          <strong>{trace.query}</strong>
+                          <span>{trace.totalResults} results</span>
+                        </div>
+                        <p>
+                          topK {trace.topK} / threshold {trace.scoreThreshold.toFixed(2)}
+                        </p>
+                        <div className="document-card__footer">
+                          <span>{trace.createdAt.replace("T", " ").slice(0, 16)} UTC</span>
+                          <span>{trace.id}</span>
+                        </div>
+                      </button>
+                      <div className="document-card__actions">
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => void handleDeleteRetrievalTrace(trace.id, trace.query)}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             <form className="lab-panel" onSubmit={handleSubmit}>

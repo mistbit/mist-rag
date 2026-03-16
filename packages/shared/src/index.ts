@@ -251,6 +251,7 @@ export type IndexBuildCatalogResponse = {
 export type SearchIndexBuildRequest = {
   query: string;
   topK?: number;
+  scoreThreshold?: number;
 };
 
 export type SearchResult = {
@@ -275,5 +276,35 @@ export type SearchIndexBuildResponse = {
   query: string;
   queryTerms: string[];
   topK: number;
+  scoreThreshold: number;
   results: SearchResult[];
+};
+
+export type SaveRetrievalTraceRequest = SearchIndexBuildRequest;
+
+export type RetrievalTraceSummary = {
+  id: string;
+  buildId: string;
+  chunkSetId: string;
+  documentId: string;
+  documentTitle: string;
+  query: string;
+  topK: number;
+  scoreThreshold: number;
+  totalResults: number;
+  createdAt: string;
+};
+
+export type RetrievalTraceRecord = {
+  id: string;
+  buildId: string;
+  chunkSetId: string;
+  documentId: string;
+  documentTitle: string;
+  createdAt: string;
+  searchResponse: SearchIndexBuildResponse;
+};
+
+export type RetrievalTraceCatalogResponse = {
+  traces: RetrievalTraceSummary[];
 };

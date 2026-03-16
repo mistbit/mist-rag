@@ -22,14 +22,18 @@ def search_index_build(build_id: str, payload: SearchIndexBuildRequest) -> Searc
     query_vector = build_hash_embedding(query_terms, build.vector_dimensions)
     chunk_lookup = {chunk.id: chunk for chunk in chunk_set.preview_response.chunks}
 
-    ranked = sorted(
-        build.chunk_vectors,
-        key=lambda vector: _dot_product(query_vector, vector.values),
-        reverse=True,
-    )[: payload.top_k]
+    scored_vectors = [
+        (vector, _dot_product(query_vector, vector.values))
+        for vector in build.chunk_vectors
+    ]
+    ranked = [
+        (vector, score)
+        for vector, score in sorted(scored_vectors, key=lambda item: item[1], reverse=True)
+        if score >= payload.score_threshold
+    ][: payload.top_k]
 
     results: list[SearchResult] = []
-    for rank, vector in enumerate(ranked, start=1):
+    for rank, (vector, score) in enumerate(ranked, start=1):
         chunk = chunk_lookup.get(vector.chunk_id)
         if chunk is None:
             continue
@@ -39,7 +43,7 @@ def search_index_build(build_id: str, payload: SearchIndexBuildRequest) -> Searc
                 chunkId=vector.chunk_id,
                 documentId=build.document_id,
                 rank=rank,
-                score=_dot_product(query_vector, vector.values),
+                score=score,
                 text=chunk.text,
                 tokenCount=vector.token_count,
                 startOffset=vector.start_offset,
@@ -58,5 +62,6 @@ def search_index_build(build_id: str, payload: SearchIndexBuildRequest) -> Searc
         query=payload.query,
         queryTerms=query_terms,
         topK=payload.top_k,
+        scoreThreshold=payload.score_threshold,
         results=results,
     )

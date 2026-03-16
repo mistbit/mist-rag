@@ -322,6 +322,7 @@ class SearchIndexBuildRequest(BaseModel):
 
     query: str = Field(min_length=1, max_length=200)
     top_k: int = Field(alias="topK", default=3, ge=1, le=8)
+    score_threshold: float = Field(alias="scoreThreshold", default=0.0, ge=-1.0, le=1.0)
 
     @field_validator("query")
     @classmethod
@@ -358,4 +359,36 @@ class SearchIndexBuildResponse(BaseModel):
     query: str
     query_terms: list[str] = Field(alias="queryTerms")
     top_k: int = Field(alias="topK")
+    score_threshold: float = Field(alias="scoreThreshold")
     results: list[SearchResult]
+
+
+class RetrievalTraceSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    build_id: str = Field(alias="buildId")
+    chunk_set_id: str = Field(alias="chunkSetId")
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    query: str
+    top_k: int = Field(alias="topK")
+    score_threshold: float = Field(alias="scoreThreshold")
+    total_results: int = Field(alias="totalResults")
+    created_at: str = Field(alias="createdAt")
+
+
+class RetrievalTraceRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    build_id: str = Field(alias="buildId")
+    chunk_set_id: str = Field(alias="chunkSetId")
+    document_id: str = Field(alias="documentId")
+    document_title: str = Field(alias="documentTitle")
+    created_at: str = Field(alias="createdAt")
+    search_response: SearchIndexBuildResponse = Field(alias="searchResponse")
+
+
+class RetrievalTraceCatalogResponse(BaseModel):
+    traces: list[RetrievalTraceSummary]

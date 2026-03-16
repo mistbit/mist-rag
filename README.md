@@ -1,6 +1,6 @@
 # Mist RAG
 
-`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1、阶段 2 与基础检索之间的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录 + top-k 检索实验”的实验闭环。
+`mist-rag` 当前已经完成 Sprint 1，并继续推进阶段 1、阶段 2 与基础检索之间的连接层：在学习首页之外，增加“样例数据集 + 本地保存文档 + 切块预览 + 历史回看 + 删除管理 + 文档级 chunk 集合管理 + 集合命名备注 + 索引构建记录 + top-k 检索实验 + retrieval trace history”的实验闭环。
 
 ## 当前内容
 
@@ -21,7 +21,8 @@
 - 已保存文档和 chunk 历史记录都支持删除；样例文档不可删除
 - 当前 preview 结果还可以保存成“文档级 chunk 集合”，与某个文档稳定绑定，并支持删除、命名和备注
 - 可基于某个文档级 chunk 集合构建索引记录，观察向量维度、词表规模和基础 embedding 状态
-- 可基于某个 index build 直接输入 query，返回 top-k chunk 排序结果与相似度分数
+- 可基于某个 index build 直接输入 query，返回 top-k chunk 排序结果、阈值过滤后的结果与相似度分数
+- 检索结果可保存为 retrieval trace，并在页面里重新载入和回放
 - 前端可展示 chunk 数量、平均长度、offset 和 token 估算
 - 前后端本地开发已打通跨域访问
 
@@ -91,6 +92,8 @@ uvicorn app.main:app --reload --port 8000
 - `POST /api/v1/documents/{document_id}/chunk-sets`
 - `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `POST /api/v1/index-builds/{build_id}/search`
+- `GET /api/v1/index-builds/{build_id}/retrieval-traces`
+- `POST /api/v1/index-builds/{build_id}/retrieval-traces`
 - `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
@@ -98,7 +101,9 @@ uvicorn app.main:app --reload --port 8000
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
 - `GET /api/v1/index-builds/{build_id}`
+- `GET /api/v1/retrieval-traces/{trace_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
+- `DELETE /api/v1/retrieval-traces/{trace_id}`
 - `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
 
@@ -146,8 +151,15 @@ uvicorn app.main:app --reload --port 8000
 基础检索说明：
 
 - `POST /api/v1/index-builds/{build_id}/search` 会把 query 用和当前索引相同的 `demo-hash-v1` 骨架向量化
+- 支持 `scoreThreshold`，会先过滤低于阈值的结果，再返回 top-k
 - 返回结果按相似度从高到低排序，并给出 `score`、`rank`、`offset` 和 chunk 文本
 - 这一层先关注“召回和排序是怎么来的”，还没有进入生成答案阶段
+
+检索轨迹说明：
+
+- `retrieval-traces` 会保存一次检索请求和返回结果，包括 `query`、`topK`、`scoreThreshold` 和最终结果列表
+- 它和 `chunk-runs` 的区别是：`chunk-runs` 面向切块实验，`retrieval-traces` 面向检索实验
+- 删除文档时，会级联清理相关 chunk set、index build 和 retrieval trace
 
 删除规则：
 
@@ -173,7 +185,18 @@ uvicorn app.main:app --reload --port 8000
 ```json
 {
   "query": "什么样的 chunk 更适合检索？",
-  "topK": 3
+  "topK": 3,
+  "scoreThreshold": 0.2
+}
+```
+
+`POST /api/v1/index-builds/{build_id}/retrieval-traces` 请求示例：
+
+```json
+{
+  "query": "什么样的 chunk 更适合检索？",
+  "topK": 3,
+  "scoreThreshold": 0.2
 }
 ```
 
@@ -217,9 +240,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 下一步
 
-完成 top-k 检索实验之后，下一步建议继续推进 retrieval / generation：
+完成 retrieval trace history 之后，下一步建议继续推进 retrieval / generation：
 
 1. 把 `demo-hash` 替换成真实 embedding provider
-2. 为检索结果增加阈值、query rewrite 和 retrieval trace
+2. 为检索结果增加 query rewrite、retrieval trace 对比和阈值实验
 3. 为索引记录补删除 / 重建和状态追踪
 4. 引入真正的 prompt 组装与答案生成页

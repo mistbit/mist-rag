@@ -12,6 +12,8 @@
 - `POST /api/v1/documents/{document_id}/chunk-sets`
 - `POST /api/v1/chunk-sets/{chunk_set_id}/index-builds`
 - `POST /api/v1/index-builds/{build_id}/search`
+- `GET /api/v1/index-builds/{build_id}/retrieval-traces`
+- `POST /api/v1/index-builds/{build_id}/retrieval-traces`
 - `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/chunk-runs`
 - `GET /api/v1/chunk-runs/{run_id}`
@@ -19,7 +21,9 @@
 - `DELETE /api/v1/chunk-runs/{run_id}`
 - `GET /api/v1/chunk-sets/{chunk_set_id}`
 - `GET /api/v1/index-builds/{build_id}`
+- `GET /api/v1/retrieval-traces/{trace_id}`
 - `DELETE /api/v1/chunk-sets/{chunk_set_id}`
+- `DELETE /api/v1/retrieval-traces/{trace_id}`
 - `PATCH /api/v1/chunk-sets/{chunk_set_id}`
 - `POST /api/v1/chunk-preview`
 
@@ -41,6 +45,12 @@
 - `GET /api/v1/chunk-sets/{chunk_set_id}/index-builds` 会列出某个集合下的索引构建历史
 - `GET /api/v1/index-builds/{build_id}` 会返回具体的向量维度、词表规模、高频词和 chunk 向量快照
 - `POST /api/v1/index-builds/{build_id}/search` 会基于该索引执行 query 向量化与 top-k 检索
+- `POST /api/v1/index-builds/{build_id}/search` 支持 `scoreThreshold`，会先过滤低分结果
+- `POST /api/v1/index-builds/{build_id}/retrieval-traces` 会保存一次检索轨迹
+- `GET /api/v1/index-builds/{build_id}/retrieval-traces` 会列出该索引下的检索历史
+- `GET /api/v1/retrieval-traces/{trace_id}` 会返回具体的 query、threshold 和检索结果
+- `DELETE /api/v1/retrieval-traces/{trace_id}` 会删除指定的检索轨迹
 - 删除文档级 chunk 集合时，会级联清理它名下的索引构建记录
-- 当前索引构建和检索都使用本地 `demo-hash-v1` 向量化骨架，先稳定接口、状态流和排序逻辑
+- 删除文档或 chunk 集合时，也会级联清理相关 retrieval trace
+- 当前索引构建和检索都使用本地 `demo-hash-v1` 向量化骨架，先稳定接口、状态流、阈值过滤和排序逻辑
 - 已开启对 `http://127.0.0.1:5173` 和 `http://localhost:5173` 的本地 CORS 支持
