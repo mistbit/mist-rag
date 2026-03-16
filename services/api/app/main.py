@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from .chunking import generate_chunk_preview
 from .chunk_runs import delete_chunk_run, get_chunk_run, list_chunk_runs, save_chunk_run
@@ -9,6 +10,7 @@ from .comparison_reports import (
     delete_comparison_report,
     get_comparison_report,
     list_comparison_reports,
+    render_comparison_report_markdown,
     save_comparison_report,
 )
 from .content import load_overview
@@ -96,6 +98,20 @@ def get_comparison_report_by_id(report_id: str) -> ComparisonReportRecord:
     if record is None:
         raise HTTPException(status_code=404, detail="Comparison report not found.")
     return record
+
+
+@app.get("/api/v1/comparison-reports/{report_id}/markdown", response_class=PlainTextResponse)
+def get_comparison_report_markdown(report_id: str) -> PlainTextResponse:
+    record = get_comparison_report(report_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Comparison report not found.")
+
+    markdown, filename = render_comparison_report_markdown(record)
+    return PlainTextResponse(
+        markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/api/v1/comparison-reports", response_model=ComparisonReportRecord)

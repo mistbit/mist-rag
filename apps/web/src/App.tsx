@@ -229,6 +229,17 @@ function buildComparisonTermSet(terms: string[]) {
   return normalizedTerms;
 }
 
+function buildComparisonReportFilename(title: string) {
+  const normalized = title
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return `${normalized || "comparison-report"}.md`;
+}
+
 const LAB_PRESETS: LabPreset[] = [
   {
     id: "balanced",
@@ -1606,6 +1617,36 @@ export default function App() {
     }
   }
 
+  async function handleExportComparisonReport(reportId: string, title: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/comparison-reports/${reportId}/markdown`);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Unexpected status ${response.status}`);
+      }
+
+      const markdown = await response.text();
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      const downloadUrl = globalThis.URL.createObjectURL(blob);
+      const link = globalThis.document?.createElement("a");
+
+      if (!link) {
+        throw new Error("Unable to create download link.");
+      }
+
+      link.href = downloadUrl;
+      link.download = buildComparisonReportFilename(title);
+      link.click();
+      globalThis.URL.revokeObjectURL(downloadUrl);
+
+      setComparisonReportStatus("saved");
+      setComparisonReportMessage(`已导出 Markdown 摘要：${title}。`);
+    } catch (error) {
+      setComparisonReportStatus("error");
+      setComparisonReportMessage(error instanceof Error ? error.message : "Unable to export comparison report.");
+    }
+  }
+
   function getComparisonInsight(slotId: ComparisonSlotId): ComparisonTermInsight | null {
     const snapshot = comparisonSlots[slotId];
     if (!snapshot?.search) {
@@ -2248,13 +2289,25 @@ export default function App() {
             >
               {comparisonReportStatus === "loading" ? "保存中..." : "保存实验报告"}
             </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!selectedComparisonReportId}
+              onClick={() =>
+                selectedComparisonReportId && selectedComparisonReportSummary
+                  ? void handleExportComparisonReport(selectedComparisonReportId, selectedComparisonReportSummary.title)
+                  : undefined
+              }
+            >
+              导出当前 Markdown
+            </button>
             <button type="button" className="secondary-button" onClick={() => void loadComparisonReportCatalog()}>
               刷新报告列表
             </button>
             <p className="helper-text">
               {selectedComparisonReportSummary
-                ? `当前已载入：${selectedComparisonReportSummary.title}。`
-                : "保存后会固定当前 A/B 快照和结论，后面可以重新载入。"}
+                ? `当前已载入：${selectedComparisonReportSummary.title}，可以直接导出 Markdown。`
+                : "保存后会固定当前 A/B 快照和结论，后面可以重新载入或导出。"}
             </p>
           </div>
 
@@ -2292,6 +2345,9 @@ export default function App() {
                     ) : null}
                   </button>
                   <div className="document-card__actions">
+                    <button type="button" className="secondary-button" onClick={() => void handleExportComparisonReport(report.id, report.title)}>
+                      导出
+                    </button>
                     <button type="button" className="danger-button" onClick={() => void handleDeleteComparisonReport(report.id, report.title)}>
                       删除
                     </button>

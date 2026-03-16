@@ -23,6 +23,7 @@
 - 增加 A/B 对照实验面板，让两次 preview / retrieval 状态可以并排比较、按 rank 对齐，并高亮差异词
 - 增加自动实验结论卡片，把 A/B 快照直接总结成可读的 chunk / retrieval 观察结论
 - 增加 comparison report snapshots，把一次 A/B 对照实验持久化成可回放报告
+- 增加 comparison report Markdown 导出，让一次 A/B 实验可以直接沉淀成学习摘要
 
 这样做的目的是先把“可解释学习界面”和“稳定数据模型”立起来，再把阶段 1 的摄取闭环和阶段 2 的索引骨架接起来。
 
@@ -60,7 +61,7 @@ mist-rag/
 
 ### `services/api`
 
-FastAPI 服务当前承担十五类能力：
+FastAPI 服务当前承担十六类能力：
 
 - 输出健康状态，便于前端或后续容器探活
 - 读取共享 JSON，暴露统一的 `overview` 数据
@@ -78,6 +79,7 @@ FastAPI 服务当前承担十五类能力：
 - 基于某个 index build 执行 query 向量化与 top-k 检索
 - 保存、列出、读取和删除 retrieval trace
 - 保存、列出、读取和删除 comparison report snapshot
+- 导出 comparison report snapshot 的 Markdown 摘要
 
 其中切块逻辑仍然保持“轻实现”：
 
@@ -123,6 +125,7 @@ Web 端当前承担两层职责：
 - 提供 A/B 对照实验面板，允许把当前 preview / retrieval 状态固定到两个槽位后直接比较差异，并高亮 query 命中词、槽位独有词和 rank 变化
 - 提供自动实验结论卡片，把当前 A/B 对照自动翻译成更细 / 更宽 / 更稳等可读结论
 - 提供 comparison report snapshot 列表，把一组 A/B 对照和结论保存、回放、删除
+- 提供 comparison report 的 Markdown 导出，把一轮实验直接变成可分享的学习记录
 - 提供文档实验区，让用户直接观察 chunkSize / chunkOverlap 的变化
 - 提供样例文档和已保存文档列表，让 preview 不再是一次性操作
 - 提供 chunk 历史列表，让同一次实验可以被回放
@@ -162,6 +165,7 @@ Guided lab 的推进状态目前完全由前端本地状态推导：
 - Rank compare 视图会把两侧高排名结果按名次对齐，直接显示当前 rank 是延续同一 chunk 还是已经发生换位
 - 实验结论卡片会把这些原始差异再整理成简短结论和下一步测试建议，降低第一次读实验结果的门槛
 - comparison report snapshot 会把当时的 A/B 快照和结论一起存进 API 存储，方便后续直接回放这次实验
+- Markdown 导出会把摘要、结论、A/B 快照和 rank 对照统一整理成文档，便于发给别人或留作实验日志
 
 本轮还补了一层“草稿状态和资产状态分离”的处理：
 
@@ -195,6 +199,7 @@ apps/web/src/App.tsx
   ├─> GET /api/v1/documents
   ├─> GET /api/v1/comparison-reports
   ├─> GET /api/v1/comparison-reports/{id}
+  ├─> GET /api/v1/comparison-reports/{id}/markdown
   ├─> GET /api/v1/documents/{id}
   ├─> GET /api/v1/documents/{id}/chunk-sets
   ├─> GET /api/v1/chunk-sets/{id}/index-builds
