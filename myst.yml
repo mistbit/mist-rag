@@ -1,0 +1,45 @@
+# Jupyter Book v2 配置（基于 mystmd）
+# 文档：https://mystmd.org/guide/frontmatter
+version: 1
+
+project:
+  id: mist-rag-tutorial
+  title: RAG 引擎从零到一
+  description: 一份循序渐进的 RAG 学习路线，从关键词匹配到工程化引擎
+  keywords:
+    - RAG
+    - Retrieval-Augmented Generation
+    - Embedding
+    - LLM
+    - 教程
+  authors:
+    - name: mistbit
+      url: https://github.com/mistbit
+  github: https://github.com/mistbit/mist-rag
+  license:
+    code: MIT
+    content: CC-BY-4.0
+
+  # 不让 myst 抓取仓库根目录的 README 与构建产物
+  exclude:
+    - README.md
+    - _build/**
+    - .venv/**
+    - lessons/**
+    - vendor/**
+
+  # 目录树（侧边栏顺序）
+  toc:
+    - file: index.md
+    - file: RAG_LEARNING_OUTLINE.md
+    - title: 🟢 第一阶段 · 最小 RAG
+      children:
+        - file: docs/lessons/lesson-01-keyword-rag.md
+        - file: docs/lessons/lesson-01-run-log.md
+        - file: docs/lessons/lesson-02-embedding-rag.md
+        - file: docs/lessons/lesson-02-run-log.md
+
+site:
+  template: book-theme
+  options:
+    pretty_urls: true

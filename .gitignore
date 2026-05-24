@@ -47,3 +47,6 @@ chroma_db/
 # Logs
 *.log
 logs/
+
+# MyST build outputs
+_build
