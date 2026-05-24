@@ -72,9 +72,10 @@ navigation:
         url: "/docs/lessons/lesson-01-keyword-rag.html"
       - title: "└ 第 1 课 · 运行日志"
         url: "/docs/lessons/lesson-01-run-log.html"
-      - title: "第 2 课 · Embedding（待开课）"
-        url: "#"
-        disabled: true
+      - title: "第 2 课 · Embedding 向量检索"
+        url: "/docs/lessons/lesson-02-embedding-rag.html"
+      - title: "└ 第 2 课 · 运行日志"
+        url: "/docs/lessons/lesson-02-run-log.html"
       - title: "第 3 课 · 接入 MiMo（待开课）"
         url: "#"
         disabled: true

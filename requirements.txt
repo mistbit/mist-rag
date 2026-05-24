@@ -6,9 +6,9 @@
 # ---- v0.1 关键词检索（标准库即可，无需任何第三方依赖）----
 # 本课无需安装任何包
 
-# ---- v0.2 Embedding（第 2 课启用） ----
-# sentence-transformers>=2.7.0
-# numpy>=1.26.0
+# ---- v0.2 Embedding（第 2 课已启用） ----
+sentence-transformers>=2.7.0
+numpy>=1.26.0
 
 # ---- v0.3 接入 MiMo LLM（第 3 课启用） ----
 # openai>=1.30.0
