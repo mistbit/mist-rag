@@ -332,3 +332,81 @@ cp .env.example .env  &&  vi .env   # 填入真实 MIMO_API_KEY
 - 切分后的 metadata（来源页码、章节）怎么沉到 prompt 里。
 
 完成 v0.4 后，你的 RAG 就能读你的笔记、论文、合同了。
+
+---
+
+## 8️⃣ 📺 Playground 用法（v0.3+ 彩蛋）
+
+第 3 课我们额外做了一个**本地浏览器 Playground**，把上面 4 个 demo 全搬到网页里：
+
+- **不再需要在终端 vi `.env`**：网页顶部「⚙️ 配置 API Key」抽屉直接填，回车即写盘并热加载；
+- **检索可视化**：每条召回都带 `doc_id` + 相似度进度条 + 原文预览；
+- **Token & 成本实时累计**：批量跑 query 时表格逐行刷新，底部累计 Σ prompt / Σ comp / Σ cost；
+- **流式可视化**：SSE 边收边写，结束帧附上完整 usage。
+
+### 8.1 架构（4 句话讲完）
+
+```
+浏览器 (HTML+CSS+vanilla JS)
+   │   fetch / SSE
+   ▼
+FastAPI @ 127.0.0.1:7860   ←  playground/server.py
+   │   from lessons import v03_llm_rag as engine
+   ▼
+v0.3 业务零重复：retrieve / build_prompt / llm_chat / llm_chat_stream / mock_llm
+```
+
+要点：
+1. **后端零业务复刻**：所有 RAG 逻辑都 `import` 自 [v03_llm_rag.py](file:///Users/masamiyui/OpenSoureProjects/Forks/mist-rag/lessons/v03_llm_rag.py)，Playground 只是 HTTP 外壳；
+2. **Key 永不出口**：`GET /api/config` 永远只回脱敏（前 6 后 4），Key 仅写入根目录 `.env`，已被 `.gitignore` 兜底；
+3. **错误路径走 4xx**：未配 Key → `412`，Key 不合法 → `400`，前端能直接展示友好提示；
+4. **POST + SSE**：流式接口用 POST 而不是 GET（因为 query 可能很长），前端用 `fetch + ReadableStream` 自己解析 SSE，**不**用 `EventSource`。
+
+### 8.2 启动
+
+```bash
+# 装好依赖（v0.3+ 段已在 requirements.txt 启用）
+pip install -r requirements.txt
+
+# 启动（默认 127.0.0.1:7860）
+.venv/bin/python -m playground.server
+```
+
+打开 <http://127.0.0.1:7860/> 即可。
+
+可选环境变量：
+
+| 环境变量             | 默认值      | 说明                          |
+| ---------------- | -------- | --------------------------- |
+| `PLAYGROUND_HOST` | `127.0.0.1` | **不要**改成 `0.0.0.0`，会暴露到局域网 |
+| `PLAYGROUND_PORT` | `7860`     | 与 Gradio 默认端口对齐，方便记忆      |
+
+### 8.3 6 个 API（前端不写也能 curl 玩）
+
+| Method | Path                | 用途                                       |
+| ------ | ------------------- | ---------------------------------------- |
+| GET    | `/api/health`       | 自检：embedding 维度、KB 大小、是否已配 Key            |
+| GET    | `/api/config`       | 拉取当前配置（Key 已脱敏）                          |
+| POST   | `/api/config`       | 写盘 `.env` 并热加载，参数：`api_key / base_url / model` |
+| POST   | `/api/retrieve`     | 仅检索，可视化 Top-K + 相似度                       |
+| POST   | `/api/mock`         | 走 [mock_llm](file:///Users/masamiyui/OpenSoureProjects/Forks/mist-rag/lessons/v03_llm_rag.py) 跑一遍                              |
+| POST   | `/api/chat`         | 非流式真模型；`use_context=false` 即"裸 LLM"     |
+| POST   | `/api/chat/stream`  | SSE 流式，事件：`retrieved` / `delta` / `done` / `error` |
+
+### 8.4 Key 安全边界（务必牢记 3 条）
+
+1. **绝不要把 Key 贴在对话里**：聊天内容会落到模型/日志/上下文缓存。Key 唯一合法的去处是项目根的 `.env`，且必须在 [.gitignore](file:///Users/masamiyui/OpenSoureProjects/Forks/mist-rag/.gitignore) 里。
+2. **绝不要把 Playground 暴露到局域网/公网**：Playground 没有鉴权，监听 `127.0.0.1` 是它唯一安全的运行姿势。需要远程演示请用 `ssh -L 7860:127.0.0.1:7860 …` 端口转发。
+3. **一旦 Key 泄露，立刻去[控制台](https://platform.xiaomimimo.com/console/api-keys)撤销**：不要"先观察一下"，撤销是免费且零成本的。
+
+### 8.5 与第 3 课终端 demo 的对应关系
+
+| Tab            | 对应终端命令                                  |
+| -------------- | --------------------------------------- |
+| 🪨 vs 🤖 Compare | `v03_llm_rag.py compare-mock`           |
+| 🌫️ Hallucination | `v03_llm_rag.py hallucination`          |
+| 💰 Usage         | `v03_llm_rag.py usage`                  |
+| 🌊 Stream        | `v03_llm_rag.py stream`                 |
+
+> 想看 4 个 demo 在终端的"原始形态"？回到 [lesson-03-run-log.md](file:///Users/masamiyui/OpenSoureProjects/Forks/mist-rag/docs/lessons/lesson-03-run-log.md) 的 Part 3。
+

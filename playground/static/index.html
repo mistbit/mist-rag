@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>mist-rag · v0.3+ Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-row">
+    <a class="brand" href="/">
+      <span class="brand-mark">RAG</span>
+      <span class="brand-text">v0.3+ Playground</span>
+    </a>
+    <a class="hd-link" href="http://localhost:8000/" target="_blank" rel="noopener">↗ 教程站</a>
+    <button id="btn-config" class="hd-btn">⚙️ 配置</button>
+  </div>
+  <div class="hd-status" id="status-bar">正在加载…</div>
+</header>
+
+<!-- 配置抽屉 -->
+<aside id="cfg-panel" class="cfg-panel hidden" aria-hidden="true">
+  <div class="cfg-card">
+    <header class="cfg-head">
+      <h2>⚙️ 配置 API Key</h2>
+      <button class="cfg-close" id="btn-cfg-close" title="关闭">✕</button>
+    </header>
+    <p class="cfg-warn">
+      🔐 Key 会写入项目根的 <code>.env</code>，已被 <code>.gitignore</code> 兜底。
+      本服务只监听 <code>127.0.0.1:7860</code>，外网 / 局域网都无法访问。
+    </p>
+    <form id="cfg-form" class="cfg-form">
+      <label>
+        <span>MIMO_API_KEY</span>
+        <input type="password" id="cfg-key" placeholder="sk-..." autocomplete="off" />
+        <small id="cfg-key-status">尚未配置</small>
+      </label>
+      <label>
+        <span>BASE_URL</span>
+        <input type="text" id="cfg-base" placeholder="https://api.xiaomimimo.com/v1" />
+      </label>
+      <label>
+        <span>MODEL</span>
+        <input type="text" id="cfg-model" placeholder="mimo-v2.5-pro" />
+      </label>
+      <div class="cfg-actions">
+        <button type="submit" class="btn btn-primary">保存并生效</button>
+        <button type="button" id="btn-cfg-cancel" class="btn">取消</button>
+      </div>
+      <p id="cfg-msg" class="cfg-msg"></p>
+    </form>
+  </div>
+</aside>
+
+<main class="page">
+  <!-- Tab 切换 -->
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="compare">🪨 vs 🤖 Compare</button>
+    <button class="tab" data-tab="hallucination">🌫️ Hallucination</button>
+    <button class="tab" data-tab="usage">💰 Usage</button>
+    <button class="tab" data-tab="stream">🌊 Stream</button>
+  </nav>
+
+  <!-- Tab: Compare -->
+  <section class="tab-panel active" id="tab-compare">
+    <h1>Mock LLM <span class="vs">vs</span> 真实 MiMo-V2.5-Pro</h1>
+    <p class="lead">同一道 query 同一组检索结果，让你直观看到 mock 与真模型的鸿沟。</p>
+    <form class="qbar" data-form="compare">
+      <input class="qbar-input" name="query" value="什么是 RAG？" placeholder="输入 query…" required />
+      <button class="btn btn-primary">运行</button>
+    </form>
+    <div class="cards two-col">
+      <article class="card card-mock">
+        <header><h3>🪨 Mock LLM</h3></header>
+        <div class="card-body" data-out="compare-mock">在上方点击「运行」开始</div>
+      </article>
+      <article class="card card-llm">
+        <header><h3>🤖 真实 LLM</h3><span class="card-stats" data-out="compare-llm-stats"></span></header>
+        <div class="card-body" data-out="compare-llm"></div>
+      </article>
+    </div>
+    <details class="retr-block">
+      <summary>📜 检索详情（Top-K）</summary>
+      <div data-out="compare-retr"></div>
+    </details>
+  </section>
+
+  <!-- Tab: Hallucination -->
+  <section class="tab-panel" id="tab-hallucination">
+    <h1>裸 LLM <span class="vs">vs</span> 给上下文的 RAG</h1>
+    <p class="lead">同一道 query 各打一次 LLM：一次不给资料，一次注入 Top-K，看回答的事实可控性差异。</p>
+    <form class="qbar" data-form="hallucination">
+      <input class="qbar-input" name="query" value="什么是 RAG？" placeholder="输入 query…" required />
+      <button class="btn btn-primary">运行</button>
+    </form>
+    <div class="cards two-col">
+      <article class="card card-bare">
+        <header><h3>❌ 不给上下文</h3><span class="card-stats" data-out="hall-bare-stats"></span></header>
+        <div class="card-body" data-out="hall-bare"></div>
+      </article>
+      <article class="card card-rag">
+        <header><h3>✅ 给上下文（RAG）</h3><span class="card-stats" data-out="hall-rag-stats"></span></header>
+        <div class="card-body" data-out="hall-rag"></div>
+      </article>
+    </div>
+    <details class="retr-block">
+      <summary>📜 检索详情（仅用于右侧 RAG）</summary>
+      <div data-out="hall-retr"></div>
+    </details>
+  </section>
+
+  <!-- Tab: Usage -->
+  <section class="tab-panel" id="tab-usage">
+    <h1>批量跑一组 query 看 Token 与成本</h1>
+    <p class="lead">一行一个 query，逐个串行调用 mimo-v2.5-pro，下方实时累计。</p>
+    <form class="qbar qbar-multi" data-form="usage">
+      <textarea class="qbar-input qbar-textarea" name="queries" rows="4">什么是 RAG？
+BM25 是什么？
+苹果公司的 CEO 是谁？</textarea>
+      <button class="btn btn-primary">逐条运行</button>
+    </form>
+    <div class="usage-table" data-out="usage-table"></div>
+    <div class="usage-summary" data-out="usage-summary"></div>
+  </section>
+
+  <!-- Tab: Stream -->
+  <section class="tab-panel" id="tab-stream">
+    <h1>流式输出（SSE）</h1>
+    <p class="lead">每个 chunk 实时打印；最后一帧附 token usage。</p>
+    <form class="qbar" data-form="stream">
+      <input class="qbar-input" name="query" value="请用 3 句话讲清楚 RAG 的核心思想。" placeholder="输入 query…" required />
+      <button class="btn btn-primary">开始流式</button>
+    </form>
+    <article class="card card-llm">
+      <header>
+        <h3>🌊 Streaming Output</h3>
+        <span class="card-stats" data-out="stream-stats"></span>
+      </header>
+      <div class="card-body card-body-stream" data-out="stream-out"></div>
+    </article>
+    <details class="retr-block">
+      <summary>📜 检索详情（注入到 prompt 的 Top-K）</summary>
+      <div data-out="stream-retr"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="ft">
+  <span>本地 Playground · 端口 7860 · Key 仅落盘 .env</span>
+  <span>·</span>
+  <a href="http://localhost:8000/docs/lessons/lesson-03-llm-rag.html" target="_blank" rel="noopener">查看第 3 课讲义</a>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
