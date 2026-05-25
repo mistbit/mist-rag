@@ -76,9 +76,10 @@ navigation:
         url: "/docs/lessons/lesson-02-embedding-rag.html"
       - title: "└ 第 2 课 · 运行日志"
         url: "/docs/lessons/lesson-02-run-log.html"
-      - title: "第 3 课 · 接入 MiMo（待开课）"
-        url: "#"
-        disabled: true
+      - title: "第 3 课 · 接入 MiMo-V2.5-Pro"
+        url: "/docs/lessons/lesson-03-llm-rag.html"
+      - title: "└ 第 3 课 · 运行日志"
+        url: "/docs/lessons/lesson-03-run-log.html"
 
   - title: "🟡 第二阶段：实用化"
     items:

@@ -10,9 +10,9 @@
 sentence-transformers>=2.7.0
 numpy>=1.26.0
 
-# ---- v0.3 接入 MiMo LLM（第 3 课启用） ----
-# openai>=1.30.0
-# python-dotenv>=1.0.0
+# ---- v0.3 接入 MiMo LLM（第 3 课已启用） ----
+openai>=1.30.0
+python-dotenv>=1.0.0
 
 # ---- v0.4 文档加载与切分（第 4 课启用） ----
 # pypdf>=4.0.0
